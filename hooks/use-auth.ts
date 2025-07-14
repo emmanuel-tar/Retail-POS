@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, createContext } from "react"
+import { useState, useEffect } from "react"
 
 interface User {
   id: string
@@ -11,105 +11,70 @@ interface User {
   permissions: string[]
 }
 
-interface AuthContextType {
-  user: User | null
-  login: (userId: string, password: string) => Promise<void>
-  logout: () => void
-  hasPermission: (permission: string) => boolean
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
-
-// Mock users for demo with comprehensive permissions
-const DEMO_USERS: User[] = [
-  {
-    id: "1",
-    userId: "MGR001",
-    name: "John Manager",
-    email: "manager@pos.com",
-    role: "manager",
-    permissions: [
-      "sales",
-      "inventory",
-      "purchase",
-      "reports",
-      "user_management",
-      "settings",
-      "price_override",
-      "discount_approval",
-      "void_transactions",
-      "cash_management",
-      "supplier_management",
-      "customer_management",
-      "adjustments",
-      "export_reports",
-    ],
-  },
-  {
-    id: "2",
-    userId: "SUP001",
-    name: "Jane Supervisor",
-    email: "supervisor@pos.com",
-    role: "supervisor",
-    permissions: [
-      "sales",
-      "inventory",
-      "reports",
-      "price_override",
-      "discount_approval",
-      "cash_management",
-      "adjustments",
-      "export_reports",
-    ],
-  },
-  {
-    id: "3",
-    userId: "SEL001",
-    name: "Bob Seller",
-    email: "seller@pos.com",
-    role: "seller",
-    permissions: ["sales", "inventory"],
-  },
-  {
-    id: "4",
-    userId: "SEL002",
-    name: "Alice Seller",
-    email: "alice@pos.com",
-    role: "seller",
-    permissions: ["sales", "inventory"],
-  },
-]
-
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check for stored user session
-    const storedUser = localStorage.getItem("pos_user")
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser))
-      } catch (error) {
-        localStorage.removeItem("pos_user")
-      }
+    // Check for stored token and verify it
+    const token = localStorage.getItem("pos_token")
+    if (token) {
+      verifyToken(token)
+    } else {
+      setLoading(false)
     }
   }, [])
 
-  const login = async (userId: string, password: string) => {
-    // Mock authentication - in real app, this would call an API
-    const foundUser = DEMO_USERS.find((u) => u.userId === userId)
+  const verifyToken = async (token: string) => {
+    try {
+      const response = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token }),
+      })
 
-    if (!foundUser || password !== "password123") {
-      throw new Error("Invalid credentials")
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+      } else {
+        localStorage.removeItem("pos_token")
+      }
+    } catch (error) {
+      console.error("Token verification error:", error)
+      localStorage.removeItem("pos_token")
+    } finally {
+      setLoading(false)
     }
+  }
 
-    setUser(foundUser)
-    localStorage.setItem("pos_user", JSON.stringify(foundUser))
+  const login = async (userId: string, password: string) => {
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId, password }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setUser(data.user)
+        localStorage.setItem("pos_token", data.token)
+      } else {
+        throw new Error(data.error || "Login failed")
+      }
+    } catch (error) {
+      throw error
+    }
   }
 
   const logout = () => {
     setUser(null)
-    localStorage.removeItem("pos_user")
+    localStorage.removeItem("pos_token")
   }
 
   const hasPermission = (permission: string) => {
@@ -121,5 +86,6 @@ export function useAuth() {
     login,
     logout,
     hasPermission,
+    loading,
   }
 }

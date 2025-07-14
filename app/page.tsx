@@ -16,6 +16,7 @@ import {
   LogOut,
   DollarSign,
   Activity,
+  Loader2,
 } from "lucide-react"
 
 import SalesModule from "@/components/sales-module"
@@ -30,9 +31,21 @@ import { useAuth } from "@/hooks/use-auth"
 import { useCurrency } from "@/hooks/use-currency"
 
 export default function POSSystem() {
-  const { user, logout, hasPermission } = useAuth()
+  const { user, logout, hasPermission, loading } = useAuth()
   const { formatCurrency } = useCurrency()
   const [activeModule, setActiveModule] = useState("sales")
+
+  // Show loading spinner while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   // Redirect to login if not authenticated
   if (!user) {
