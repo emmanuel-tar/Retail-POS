@@ -1,8 +1,6 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect, createContext, useContext } from "react"
+import { useState, useEffect, createContext } from "react"
 
 interface User {
   id: string
@@ -82,7 +80,7 @@ const DEMO_USERS: User[] = [
   },
 ]
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
@@ -118,20 +116,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return user?.permissions.includes(permission) || false
   }
 
-  const value = {
+  return {
     user,
     login,
     logout,
     hasPermission,
   }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
 }
