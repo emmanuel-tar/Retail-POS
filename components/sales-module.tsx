@@ -1,13 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import type React from "react"
+
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -16,262 +15,257 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Receipt, Pause, Play, X, Loader2 } from "lucide-react"
-import { useAuth } from "@/hooks/use-auth"
+import { useToast } from "@/components/ui/use-toast"
 import { useCurrency } from "@/hooks/use-currency"
-import { useToast } from "@/hooks/use-toast"
+import { Loader2, PlusCircle, MinusCircle, Trash2, Save, Receipt, XCircle } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
 
 interface Product {
   id: string
+  sku: string
   name: string
   price: number
-  barcode: string
-  category: string
-  stock: number
-  cost: number
-  min_stock: number
-  supplier_name?: string
+  stock_quantity: number
 }
 
 interface CartItem extends Product {
   quantity: number
-  discount?: number
+  itemTotal: number
 }
 
 interface HeldTransaction {
   id: string
-  hold_id: string
-  items: CartItem[]
-  subtotal: number
-  tax: number
-  total: number
-  note?: string
+  hold_name: string
+  held_data: {
+    cart: CartItem[]
+    total: number
+  }
   created_at: string
-  cashier_name: string
 }
 
 export default function SalesModule() {
   const { user, hasPermission } = useAuth()
-  const { formatCurrency } = useCurrency()
   const { toast } = useToast()
+  const { formatCurrency } = useCurrency()
+
+  const [searchTerm, setSearchTerm] = useState("")
   const [products, setProducts] = useState<Product[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("all")
-  const [paymentMethod, setPaymentMethod] = useState("cash")
-  const [customerPaid, setCustomerPaid] = useState("")
+  const [total, setTotal] = useState(0)
+  const [isProcessingSale, setIsProcessingSale] = useState(false)
   const [heldTransactions, setHeldTransactions] = useState<HeldTransaction[]>([])
-  const [showHeldTransactions, setShowHeldTransactions] = useState(false)
-  const [holdNote, setHoldNote] = useState("")
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [processing, setProcessing] = useState(false)
+  const [isHoldingSale, setIsHoldingSale] = useState(false)
+  const [holdName, setHoldName] = useState("")
+  const [isRecallingSale, setIsRecallingSale] = useState(false)
 
-  // Load products and held transactions
-  useEffect(() => {
-    loadProducts()
-    loadHeldTransactions()
-  }, [])
-
-  const loadProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
-      const params = new URLSearchParams()
-      if (searchTerm) params.append("search", searchTerm)
-      if (selectedCategory !== "all") params.append("category", selectedCategory)
-
-      const response = await fetch(`/api/products?${params}`)
+      const response = await fetch("/api/products")
+      if (!response.ok) throw new Error("Failed to fetch products")
       const data = await response.json()
-
-      if (data.success) {
-        setProducts(data.data)
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to load products",
-          variant: "destructive",
-        })
-      }
+      setProducts(data)
     } catch (error) {
-      console.error("Error loading products:", error)
       toast({
         title: "Error",
-        description: "Failed to load products",
+        description: "Failed to load products. Please try again.",
         variant: "destructive",
       })
-    } finally {
-      setLoading(false)
+      console.error("Error fetching products:", error)
     }
-  }
+  }, [toast])
 
-  const loadHeldTransactions = async () => {
+  const fetchHeldTransactions = useCallback(async () => {
     try {
-      const params = new URLSearchParams()
-      if (user?.id) params.append("cashierId", user.id)
-
-      const response = await fetch(`/api/held-transactions?${params}`)
+      const response = await fetch("/api/held-transactions")
+      if (!response.ok) throw new Error("Failed to fetch held transactions")
       const data = await response.json()
-
-      if (data.success) {
-        setHeldTransactions(
-          data.data.map((ht: any) => ({
-            ...ht,
-            items: ht.items.map((item: any) => ({
-              id: item.product_id,
-              name: item.product_name,
-              price: Number.parseFloat(item.unit_price),
-              quantity: item.quantity,
-              barcode: "",
-              category: "",
-              stock: 0,
-              cost: 0,
-              min_stock: 0,
-            })),
-          })),
-        )
-      }
+      setHeldTransactions(data)
     } catch (error) {
-      console.error("Error loading held transactions:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load held transactions.",
+        variant: "destructive",
+      })
+      console.error("Error fetching held transactions:", error)
     }
+  }, [toast])
+
+  useEffect(() => {
+    fetchProducts()
+    fetchHeldTransactions()
+  }, [fetchProducts, fetchHeldTransactions])
+
+  useEffect(() => {
+    const newTotal = cart.reduce((sum, item) => sum + item.itemTotal, 0)
+    setTotal(newTotal)
+  }, [cart])
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value)
   }
 
-  // Reload products when search term or category changes
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      loadProducts()
-    }, 300)
-
-    return () => clearTimeout(timeoutId)
-  }, [searchTerm, selectedCategory])
-
-  const categories = ["all", ...Array.from(new Set(products.map((p) => p.category)))]
+  const filteredProducts = products.filter(
+    (product) =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.sku.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
   const addToCart = (product: Product) => {
-    if (product.stock <= 0) {
-      toast({
-        title: "Out of Stock",
-        description: `${product.name} is out of stock`,
-        variant: "destructive",
-      })
-      return
-    }
-
-    setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id)
-      if (existing) {
-        if (existing.quantity >= product.stock) {
-          toast({
-            title: "Insufficient Stock",
-            description: `Only ${product.stock} units available`,
-            variant: "destructive",
-          })
-          return prev
-        }
-        return prev.map((item) => (item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item))
+    setCart((prevCart) => {
+      const existingItem = prevCart.find((item) => item.id === product.id)
+      if (existingItem) {
+        const updatedCart = prevCart.map((item) =>
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + 1, itemTotal: (item.quantity + 1) * item.price }
+            : item,
+        )
+        return updatedCart
+      } else {
+        return [...prevCart, { ...product, quantity: 1, itemTotal: product.price }]
       }
-      return [...prev, { ...product, quantity: 1 }]
+    })
+    setSearchTerm("") // Clear search after adding
+  }
+
+  const updateCartQuantity = (productId: string, delta: number) => {
+    setCart((prevCart) => {
+      const updatedCart = prevCart
+        .map((item) =>
+          item.id === productId
+            ? { ...item, quantity: item.quantity + delta, itemTotal: (item.quantity + delta) * item.price }
+            : item,
+        )
+        .filter((item) => item.quantity > 0) // Remove if quantity drops to 0 or less
+      return updatedCart
     })
   }
 
-  const updateQuantity = (id: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(id)
-      return
-    }
+  const removeFromCart = (productId: string) => {
+    setCart((prevCart) => prevCart.filter((item) => item.id !== productId))
+  }
 
-    const product = products.find((p) => p.id === id)
-    if (product && quantity > product.stock) {
+  const processSale = async () => {
+    if (cart.length === 0) {
       toast({
-        title: "Insufficient Stock",
-        description: `Only ${product.stock} units available`,
-        variant: "destructive",
+        title: "No items in cart",
+        description: "Please add items to the cart before processing a sale.",
+        variant: "warning",
       })
       return
     }
 
-    setCart((prev) => prev.map((item) => (item.id === id ? { ...item, quantity } : item)))
-  }
-
-  const removeFromCart = (id: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== id))
-  }
-
-  const clearCart = () => {
-    setCart([])
-    setCustomerPaid("")
-  }
-
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const tax = subtotal * 0.1 // 10% tax
-  const total = subtotal + tax
-
-  const holdTransaction = async () => {
-    if (cart.length === 0) return
-
-    setProcessing(true)
+    setIsProcessingSale(true)
     try {
-      const holdId = `HOLD-${Date.now()}`
+      const saleItems = cart.map((item) => ({
+        product_id: item.id,
+        quantity: item.quantity,
+        unit_price: item.price,
+        item_total: item.itemTotal,
+      }))
 
+      const response = await fetch("/api/sales", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          total_amount: total,
+          discount_amount: 0, // Placeholder
+          tax_amount: 0, // Placeholder
+          payment_method: "Cash", // Placeholder
+          user_id: user?.id, // Current logged-in user ID
+          items: saleItems,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to process sale")
+      }
+
+      toast({
+        title: "Sale Processed!",
+        description: `Total: ${formatCurrency(total)}. Stock updated.`,
+      })
+      setCart([])
+      setTotal(0)
+      fetchProducts() // Refresh product stock
+    } catch (error) {
+      toast({
+        title: "Sale Error",
+        description: `Failed to process sale: ${error instanceof Error ? error.message : "Unknown error"}`,
+        variant: "destructive",
+      })
+      console.error("Error processing sale:", error)
+    } finally {
+      setIsProcessingSale(false)
+    }
+  }
+
+  const holdSale = async () => {
+    if (cart.length === 0) {
+      toast({
+        title: "No items to hold",
+        description: "Add items to the cart before holding a sale.",
+        variant: "warning",
+      })
+      return
+    }
+
+    if (!holdName.trim()) {
+      toast({
+        title: "Hold Name Required",
+        description: "Please provide a name for the held transaction.",
+        variant: "warning",
+      })
+      return
+    }
+
+    setIsHoldingSale(true)
+    try {
       const response = await fetch("/api/held-transactions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          holdId,
-          items: cart,
-          subtotal,
-          tax,
-          total,
-          note: holdNote,
-          cashierId: user?.id,
+          hold_name: holdName,
+          held_data: { cart, total },
         }),
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        clearCart()
-        setHoldNote("")
-        loadHeldTransactions()
-        toast({
-          title: "Success",
-          description: "Transaction held successfully",
-        })
-      } else {
-        throw new Error(data.error)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to hold sale")
       }
-    } catch (error) {
-      console.error("Error holding transaction:", error)
+
       toast({
-        title: "Error",
-        description: "Failed to hold transaction",
+        title: "Sale Held",
+        description: `Transaction "${holdName}" has been held.`,
+      })
+      setCart([])
+      setTotal(0)
+      setHoldName("")
+      fetchHeldTransactions() // Refresh held transactions list
+    } catch (error) {
+      toast({
+        title: "Hold Sale Error",
+        description: `Failed to hold sale: ${error instanceof Error ? error.message : "Unknown error"}`,
         variant: "destructive",
       })
+      console.error("Error holding sale:", error)
     } finally {
-      setProcessing(false)
+      setIsHoldingSale(false)
     }
   }
 
-  const recallTransaction = (heldTransaction: HeldTransaction) => {
-    setCart(heldTransaction.items)
-    deleteHeldTransaction(heldTransaction.id)
-    setShowHeldTransactions(false)
+  const recallSale = (heldTransaction: HeldTransaction) => {
+    setCart(heldTransaction.held_data.cart)
+    setTotal(heldTransaction.held_data.total)
+    setHoldName(heldTransaction.hold_name) // Pre-fill hold name for potential re-holding
     toast({
-      title: "Success",
-      description: "Transaction recalled successfully",
+      title: "Sale Recalled",
+      description: `Transaction "${heldTransaction.hold_name}" has been loaded.`,
     })
   }
 
@@ -281,443 +275,251 @@ export default function SalesModule() {
         method: "DELETE",
       })
 
-      if (response.ok) {
-        loadHeldTransactions()
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to delete held transaction")
       }
+
+      toast({
+        title: "Held Transaction Deleted",
+        description: "The held transaction has been removed.",
+      })
+      fetchHeldTransactions() // Refresh held transactions list
     } catch (error) {
+      toast({
+        title: "Delete Error",
+        description: `Failed to delete held transaction: ${error instanceof Error ? error.message : "Unknown error"}`,
+        variant: "destructive",
+      })
       console.error("Error deleting held transaction:", error)
     }
   }
 
-  const processPayment = async () => {
-    if (cart.length === 0) return
-
-    setProcessing(true)
-    try {
-      const paidAmount = Number.parseFloat(customerPaid) || 0
-      const change = paymentMethod === "cash" ? Math.max(0, paidAmount - total) : 0
-      const saleId = `SALE-${Date.now()}`
-
-      const saleData = {
-        saleId,
-        subtotal,
-        tax,
-        total,
-        paymentMethod,
-        customerPaid: paidAmount,
-        changeAmount: change,
-      }
-
-      const items = cart.map((item) => ({
-        productId: item.id,
-        productName: item.name,
-        quantity: item.quantity,
-        unitPrice: item.price,
-        totalPrice: item.price * item.quantity,
-        discount: item.discount || 0,
-      }))
-
-      const response = await fetch("/api/sales", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sale: saleData,
-          items,
-          cashierId: user?.id,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        // Print receipt (mock)
-        console.log("Receipt printed:", data.data)
-
-        clearCart()
-        setShowPaymentDialog(false)
-        setPaymentMethod("cash")
-
-        // Reload products to update stock levels
-        loadProducts()
-
-        toast({
-          title: "Success",
-          description: "Sale completed successfully",
-        })
-      } else {
-        throw new Error(data.error)
-      }
-    } catch (error) {
-      console.error("Error processing payment:", error)
-      toast({
-        title: "Error",
-        description: "Failed to process payment",
-        variant: "destructive",
-      })
-    } finally {
-      setProcessing(false)
-    }
-  }
-
-  const canProcessPayment = () => {
-    if (paymentMethod === "cash") {
-      const paidAmount = Number.parseFloat(customerPaid) || 0
-      return paidAmount >= total
-    }
-    return true // For card payments
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading products...</span>
-      </div>
-    )
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight">Sales Terminal</h2>
-        <div className="flex space-x-2">
-          {/* Always show recall button */}
-          <Button
-            variant="outline"
-            onClick={() => setShowHeldTransactions(true)}
-            className="flex items-center space-x-2"
-          >
-            <Play className="h-4 w-4" />
-            <span>Recall ({heldTransactions.length})</span>
-          </Button>
-
-          {cart.length > 0 && (
-            <>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="flex items-center space-x-2 bg-transparent">
-                    <Pause className="h-4 w-4" />
-                    <span>Hold</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Hold Transaction</DialogTitle>
-                    <DialogDescription>Add a note for this held transaction (optional)</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="holdNote">Note</Label>
-                      <Textarea
-                        id="holdNote"
-                        placeholder="Customer name or special instructions..."
-                        value={holdNote}
-                        onChange={(e) => setHoldNote(e.target.value)}
-                      />
-                    </div>
-                    <Button onClick={holdTransaction} className="w-full" disabled={processing}>
-                      {processing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Holding...
-                        </>
-                      ) : (
-                        "Hold Transaction"
-                      )}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              <Button variant="destructive" onClick={clearCart} className="flex items-center space-x-2">
-                <Trash2 className="h-4 w-4" />
-                <span>Clear</span>
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Product Selection */}
-        <div className="lg:col-span-2 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Product Search</CardTitle>
-              <div className="flex space-x-2">
-                <div className="flex-1">
-                  <Input
-                    placeholder="Search products or scan barcode..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full"
-                  />
-                </div>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category === "all" ? "All Categories" : category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-96">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {products.map((product) => (
-                    <Card key={product.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                      <CardContent className="p-4" onClick={() => addToCart(product)}>
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <h3 className="font-semibold">{product.name}</h3>
-                            <p className="text-sm text-muted-foreground">{product.category}</p>
-                            <p className="text-lg font-bold text-green-600">{formatCurrency(product.price)}</p>
-                            {product.supplier_name && (
-                              <p className="text-xs text-muted-foreground">by {product.supplier_name}</p>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <Badge
-                              variant={
-                                product.stock > product.min_stock
-                                  ? "default"
-                                  : product.stock > 0
-                                    ? "secondary"
-                                    : "destructive"
-                              }
-                            >
-                              Stock: {product.stock}
-                            </Badge>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Shopping Cart */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <ShoppingCart className="h-5 w-5" />
-                <span>Current Sale</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {cart.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ShoppingCart className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Cart is empty</p>
-                  <p className="text-sm">Add products to start a sale</p>
-                </div>
-              ) : (
-                <ScrollArea className="h-64">
-                  <div className="space-y-2">
-                    {cart.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-2 border rounded">
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{item.name}</p>
-                          <p className="text-xs text-muted-foreground">{formatCurrency(item.price)} each</p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="w-8 text-center">{item.quantity}</span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <Button size="sm" variant="destructive" onClick={() => removeFromCart(item.id)}>
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
-
-              {cart.length > 0 && (
-                <>
-                  <Separator className="my-4" />
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Subtotal:</span>
-                      <span>{formatCurrency(subtotal)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Tax (10%):</span>
-                      <span>{formatCurrency(tax)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-bold text-lg">
-                      <span>Total:</span>
-                      <span>{formatCurrency(total)}</span>
-                    </div>
-                  </div>
-
-                  <Button className="w-full mt-4" onClick={() => setShowPaymentDialog(true)}>
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Process Payment
-                  </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Held Transactions Dialog */}
-      <Dialog open={showHeldTransactions} onOpenChange={setShowHeldTransactions}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Held Transactions</DialogTitle>
-            <DialogDescription>Select a transaction to recall or delete</DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="h-96">
-            {heldTransactions.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Pause className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No held transactions</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {heldTransactions.map((transaction) => (
-                  <Card key={transaction.id}>
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <Badge variant="outline">{transaction.hold_id}</Badge>
-                            <span className="text-sm text-muted-foreground">
-                              {new Date(transaction.created_at).toLocaleString()}
-                            </span>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-1">Cashier: {transaction.cashier_name}</p>
-                          {transaction.note && (
-                            <p className="text-sm text-muted-foreground mb-2">Note: {transaction.note}</p>
-                          )}
-                          <div className="text-sm">
-                            <p>{transaction.items.length} items</p>
-                            <p className="font-bold">Total: {formatCurrency(transaction.total)}</p>
-                          </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          <Button size="sm" onClick={() => recallTransaction(transaction)}>
-                            <Play className="h-4 w-4 mr-1" />
-                            Recall
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="sm" variant="destructive">
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                Delete
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Held Transaction</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete this held transaction? This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => deleteHeldTransaction(transaction.id)}>
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-4">
+      {/* Product Search & List */}
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle>Products</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Input
+            placeholder="Search products by name or SKU..."
+            value={searchTerm}
+            onChange={handleSearch}
+            className="mb-4"
+          />
+          <div className="max-h-[400px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredProducts.map((product) => (
+                  <TableRow key={product.id}>
+                    <TableCell>{product.sku}</TableCell>
+                    <TableCell>{product.name}</TableCell>
+                    <TableCell>{formatCurrency(product.price)}</TableCell>
+                    <TableCell>{product.stock_quantity}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addToCart(product)}
+                        disabled={product.stock_quantity <= 0}
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </div>
-            )}
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Payment Dialog */}
-      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Process Payment</DialogTitle>
-            <DialogDescription>Total amount: {formatCurrency(total)}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="paymentMethod">Payment Method</Label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="mobile">Mobile Payment</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {paymentMethod === "cash" && (
-              <div>
-                <Label htmlFor="customerPaid">Amount Paid</Label>
-                <Input
-                  id="customerPaid"
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={customerPaid}
-                  onChange={(e) => setCustomerPaid(e.target.value)}
-                />
-                {customerPaid && (
-                  <div className="mt-2 text-sm">
-                    <p>Change: {formatCurrency(Math.max(0, Number.parseFloat(customerPaid) - total))}</p>
-                  </div>
+      {/* Cart & Checkout */}
+      <Card className="lg:col-span-1">
+        <CardHeader>
+          <CardTitle>Current Sale</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="max-h-[300px] overflow-y-auto mb-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Qty</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cart.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                      No items in cart
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  cart.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell className="flex items-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => updateCartQuantity(item.id, -1)}
+                        >
+                          <MinusCircle className="h-4 w-4" />
+                        </Button>
+                        <span>{item.quantity}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => updateCartQuantity(item.id, 1)}
+                        >
+                          <PlusCircle className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                      <TableCell>{formatCurrency(item.price)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.itemTotal)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFromCart(item.id)}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
-              </div>
-            )}
-
-            <Button onClick={processPayment} disabled={!canProcessPayment() || processing} className="w-full">
-              {processing ? (
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex justify-between items-center font-bold text-lg mb-4">
+            <span>Total:</span>
+            <span>{formatCurrency(total)}</span>
+          </div>
+          <div className="space-y-2">
+            <Button onClick={processSale} className="w-full" disabled={isProcessingSale || cart.length === 0}>
+              {isProcessingSale ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Processing...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
                 </>
               ) : (
                 <>
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Complete Sale
+                  <Receipt className="mr-2 h-4 w-4" /> Process Sale
                 </>
               )}
             </Button>
+
+            <Dialog open={isRecallingSale} onOpenChange={setIsRecallingSale}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full bg-transparent">
+                  Recall Held Sale
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Recall Held Transactions</DialogTitle>
+                  <DialogDescription>Select a held transaction to recall.</DialogDescription>
+                </DialogHeader>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {heldTransactions.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground">
+                          No held transactions
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      heldTransactions.map((held) => (
+                        <TableRow key={held.id}>
+                          <TableCell>{held.hold_name}</TableCell>
+                          <TableCell>{formatCurrency(held.held_data.total)}</TableCell>
+                          <TableCell>{new Date(held.created_at).toLocaleString()}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                recallSale(held)
+                                setIsRecallingSale(false)
+                              }}
+                            >
+                              Recall
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="ml-2 h-8 w-8"
+                              onClick={() => deleteHeldTransaction(held.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full bg-transparent" disabled={cart.length === 0}>
+                  Hold Sale
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Hold Current Sale</DialogTitle>
+                  <DialogDescription>Enter a name to save this transaction for later.</DialogDescription>
+                </DialogHeader>
+                <Input
+                  placeholder="Enter a name for this held sale"
+                  value={holdName}
+                  onChange={(e) => setHoldName(e.target.value)}
+                  className="mb-4"
+                />
+                <Button onClick={holdSale} className="w-full" disabled={isHoldingSale || !holdName.trim()}>
+                  {isHoldingSale ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Holding...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" /> Save Held Sale
+                    </>
+                  )}
+                </Button>
+              </DialogContent>
+            </Dialog>
+
+            <Button variant="destructive" onClick={() => setCart([])} className="w-full" disabled={cart.length === 0}>
+              <XCircle className="mr-2 h-4 w-4" /> Clear Sale
+            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </CardContent>
+      </Card>
     </div>
   )
 }

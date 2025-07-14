@@ -1,98 +1,73 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
+import { sql, executeTransaction } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const from = searchParams.get("from")
-    const to = searchParams.get("to")
-    const cashierId = searchParams.get("cashierId")
-
-    let query = `
-      SELECT s.*, u.name as cashier_name,
-             json_agg(
-               json_build_object(
-                 'id', si.id,
-                 'product_id', si.product_id,
-                 'product_name', si.product_name,
-                 'quantity', si.quantity,
-                 'unit_price', si.unit_price,
-                 'total_price', si.total_price,
-                 'discount', si.discount
-               )
-             ) as items
-      FROM sales s
-      LEFT JOIN users u ON s.cashier_id = u.id
-      LEFT JOIN sale_items si ON s.id = si.sale_id
-      WHERE s.status = 'completed'
-    `
-    const params: any[] = []
-
-    if (from) {
-      query += ` AND s.created_at >= $${params.length + 1}`
-      params.push(from)
-    }
-
-    if (to) {
-      query += ` AND s.created_at <= $${params.length + 1}`
-      params.push(to)
-    }
-
-    if (cashierId) {
-      query += ` AND s.cashier_id = $${params.length + 1}`
-      params.push(cashierId)
-    }
-
-    query += ` GROUP BY s.id, u.name ORDER BY s.created_at DESC`
-
-    const sales = await sql(query, params)
-
-    return NextResponse.json({
-      success: true,
-      data: sales,
-    })
+    const sales = await sql`SELECT * FROM sales ORDER BY sale_date DESC`
+    return NextResponse.json(sales)
   } catch (error) {
-    console.error("Sales fetch error:", error)
+    console.error("Error fetching sales:", error)
     return NextResponse.json({ error: "Failed to fetch sales" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { sale, items, cashierId } = await request.json()
+    const { total_amount, discount_amount, tax_amount, payment_method, user_id, customer_id, notes, items } =
+      await request.json()
 
-    // Insert sale record
-    const saleResult = await sql`
-      INSERT INTO sales (sale_id, cashier_id, subtotal, tax, total, payment_method, customer_paid, change_amount)
-      VALUES (${sale.saleId}, ${cashierId}, ${sale.subtotal}, ${sale.tax}, ${sale.total}, 
-              ${sale.paymentMethod}, ${sale.customerPaid}, ${sale.changeAmount})
-      RETURNING *
-    `
-
-    const saleId = saleResult[0].id
-
-    // Insert sale items
-    for (const item of items) {
-      await sql`
-        INSERT INTO sale_items (sale_id, product_id, product_name, quantity, unit_price, total_price, discount)
-        VALUES (${saleId}, ${item.productId}, ${item.productName}, ${item.quantity}, 
-                ${item.unitPrice}, ${item.totalPrice}, ${item.discount || 0})
-      `
-
-      // Update product stock
-      await sql`
-        UPDATE products 
-        SET stock = stock - ${item.quantity}
-        WHERE id = ${item.productId}
-      `
+    if (!total_amount || !user_id || !items || items.length === 0) {
+      return NextResponse.json({ error: "Total amount, user ID, and items are required" }, { status: 400 })
     }
 
-    return NextResponse.json({
-      success: true,
-      data: saleResult[0],
+    const transactionQueries = []
+
+    // 1. Insert into sales table
+    transactionQueries.push({
+      query: `
+        INSERT INTO sales (total_amount, discount_amount, tax_amount, payment_method, user_id, customer_id, notes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+      `,
+      params: [total_amount, discount_amount, tax_amount, payment_method, user_id, customer_id, notes],
     })
+
+    const result = await executeTransaction(transactionQueries)
+
+    if (!result.success || !result.data || result.data.length === 0) {
+      throw new Error("Failed to create sale record")
+    }
+
+    const saleId = result.data[0][0].id // Assuming the first query returns the sale ID
+
+    // 2. Insert into sale_items and update product stock
+    for (const item of items) {
+      transactionQueries.push({
+        query: `
+          INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, item_total)
+          VALUES ($1, $2, $3, $4, $5)
+        `,
+        params: [saleId, item.product_id, item.quantity, item.unit_price, item.item_total],
+      })
+      transactionQueries.push({
+        query: `
+          UPDATE products
+          SET stock_quantity = stock_quantity - $1
+          WHERE id = $2
+        `,
+        params: [item.quantity, item.product_id],
+      })
+    }
+
+    const finalResult = await executeTransaction(transactionQueries)
+
+    if (!finalResult.success) {
+      throw new Error(finalResult.error || "Failed to complete sale transaction")
+    }
+
+    return NextResponse.json({ message: "Sale recorded successfully", saleId }, { status: 201 })
   } catch (error) {
-    console.error("Sale creation error:", error)
+    console.error("Error creating sale:", error)
     return NextResponse.json({ error: "Failed to create sale" }, { status: 500 })
   }
 }

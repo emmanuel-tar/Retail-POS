@@ -3,59 +3,30 @@ import { sql } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const search = searchParams.get("search")
-    const category = searchParams.get("category")
-
-    let query = `
-      SELECT p.*, s.name as supplier_name
-      FROM products p
-      LEFT JOIN suppliers s ON p.supplier_id = s.id
-      WHERE 1=1
-    `
-    const params: any[] = []
-
-    if (search) {
-      query += ` AND (p.name ILIKE $${params.length + 1} OR p.barcode ILIKE $${params.length + 1})`
-      params.push(`%${search}%`)
-    }
-
-    if (category && category !== "all") {
-      query += ` AND p.category = $${params.length + 1}`
-      params.push(category)
-    }
-
-    query += ` ORDER BY p.name`
-
-    const products = await sql(query, params)
-
-    return NextResponse.json({
-      success: true,
-      data: products,
-    })
+    const products = await sql`SELECT * FROM products ORDER BY name ASC`
+    return NextResponse.json(products)
   } catch (error) {
-    console.error("Products fetch error:", error)
+    console.error("Error fetching products:", error)
     return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const product = await request.json()
+    const { sku, name, description, price, cost, stock_quantity, category, supplier_id } = await request.json()
 
-    const result = await sql`
-      INSERT INTO products (name, barcode, price, cost, stock, min_stock, category, supplier_id)
-      VALUES (${product.name}, ${product.barcode}, ${product.price}, ${product.cost}, 
-              ${product.stock}, ${product.minStock}, ${product.category}, ${product.supplierId})
+    if (!sku || !name || !price) {
+      return NextResponse.json({ error: "SKU, name, and price are required" }, { status: 400 })
+    }
+
+    const newProduct = await sql`
+      INSERT INTO products (sku, name, description, price, cost, stock_quantity, category, supplier_id)
+      VALUES (${sku}, ${name}, ${description}, ${price}, ${cost}, ${stock_quantity}, ${category}, ${supplier_id})
       RETURNING *
     `
-
-    return NextResponse.json({
-      success: true,
-      data: result[0],
-    })
+    return NextResponse.json(newProduct[0], { status: 201 })
   } catch (error) {
-    console.error("Product creation error:", error)
+    console.error("Error creating product:", error)
     return NextResponse.json({ error: "Failed to create product" }, { status: 500 })
   }
 }

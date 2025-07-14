@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
-import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
@@ -31,9 +30,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Account is inactive or locked" }, { status: 401 })
     }
 
-    // For demo purposes, we'll accept 'password123' for all users
-    // In production, use proper password hashing
-    const isValidPassword = password === "password123" || (await bcrypt.compare(password, user.password_hash))
+    // Simplified password check for demo purposes
+    const isValidPassword = password === "password123"
 
     if (!isValidPassword) {
       // Log failed login attempt
