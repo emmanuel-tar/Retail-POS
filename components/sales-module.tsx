@@ -1,17 +1,23 @@
 "use client"
 
-import { DialogTrigger } from "@/components/ui/dialog"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Minus, Plus, ShoppingCart, Trash2, CreditCard, Banknote, Receipt } from "lucide-react"
+import { Minus, Plus, ShoppingCart, Trash2, CreditCard, Banknote, Receipt, Pause, Play } from "lucide-react"
 import { useCurrency } from "@/hooks/use-currency"
+import { useAuth } from "@/hooks/use-auth"
 import { Label } from "@/components/ui/label"
 
 interface Product {
@@ -27,25 +33,64 @@ interface CartItem extends Product {
   quantity: number
 }
 
+interface HeldTransaction {
+  id: string
+  items: CartItem[]
+  timestamp: string
+  cashier: string
+  total: number
+}
+
+interface Sale {
+  id: string
+  items: CartItem[]
+  subtotal: number
+  tax: number
+  total: number
+  paymentMethod: "cash" | "card"
+  amountReceived?: number
+  change?: number
+  cashier: string
+  timestamp: string
+}
+
 export default function SalesModule() {
   const { formatCurrency } = useCurrency()
+  const { user } = useAuth()
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [showCheckout, setShowCheckout] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card">("cash")
   const [amountReceived, setAmountReceived] = useState("")
 
-  const [heldTransactions, setHeldTransactions] = useState<
-    Array<{
-      id: string
-      items: CartItem[]
-      timestamp: string
-      cashier: string
-    }>
-  >([])
+  const [heldTransactions, setHeldTransactions] = useState<HeldTransaction[]>([])
   const [showHeldTransactions, setShowHeldTransactions] = useState(false)
   const [showVoidDialog, setShowVoidDialog] = useState(false)
   const [voidReason, setVoidReason] = useState("")
+  const [sales, setSales] = useState<Sale[]>([])
+
+  // Load held transactions from localStorage on component mount
+  useEffect(() => {
+    const savedHeldTransactions = localStorage.getItem("heldTransactions")
+    if (savedHeldTransactions) {
+      setHeldTransactions(JSON.parse(savedHeldTransactions))
+    }
+
+    const savedSales = localStorage.getItem("sales")
+    if (savedSales) {
+      setSales(JSON.parse(savedSales))
+    }
+  }, [])
+
+  // Save held transactions to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("heldTransactions", JSON.stringify(heldTransactions))
+  }, [heldTransactions])
+
+  // Save sales to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("sales", JSON.stringify(sales))
+  }, [sales])
 
   // Mock products data
   const products: Product[] = [
@@ -102,11 +147,12 @@ export default function SalesModule() {
   const holdTransaction = () => {
     if (cart.length === 0) return
 
-    const heldTransaction = {
+    const heldTransaction: HeldTransaction = {
       id: `HOLD-${Date.now()}`,
       items: [...cart],
       timestamp: new Date().toLocaleString(),
-      cashier: "Current User", // In real app, get from auth context
+      cashier: user?.name || "Unknown User",
+      total: getTotal(),
     }
 
     setHeldTransactions([...heldTransactions, heldTransaction])
@@ -114,11 +160,15 @@ export default function SalesModule() {
     alert("Transaction held successfully!")
   }
 
-  const recallTransaction = (heldTransaction: any) => {
+  const recallTransaction = (heldTransaction: HeldTransaction) => {
     setCart(heldTransaction.items)
     setHeldTransactions(heldTransactions.filter((t) => t.id !== heldTransaction.id))
     setShowHeldTransactions(false)
     alert("Transaction recalled successfully!")
+  }
+
+  const deleteHeldTransaction = (transactionId: string) => {
+    setHeldTransactions(heldTransactions.filter((t) => t.id !== transactionId))
   }
 
   const voidTransaction = () => {
@@ -178,7 +228,7 @@ export default function SalesModule() {
         <div>Receipt #: ${receiptNumber}</div>
         <div>Date: ${now.toLocaleDateString()}</div>
         <div>Time: ${now.toLocaleTimeString()}</div>
-        <div>Cashier: Current User</div>
+        <div>Cashier: ${user?.name || "Unknown"}</div>
         <div class="line"></div>
         ${cart
           .map(
@@ -212,6 +262,22 @@ export default function SalesModule() {
   }
 
   const handleCheckout = () => {
+    // Create sale record
+    const sale: Sale = {
+      id: `SALE-${Date.now()}`,
+      items: [...cart],
+      subtotal: getSubtotal(),
+      tax: getTax(),
+      total: getTotal(),
+      paymentMethod,
+      amountReceived: paymentMethod === "cash" ? Number.parseFloat(amountReceived) : undefined,
+      change: paymentMethod === "cash" ? getChange() : undefined,
+      cashier: user?.name || "Unknown User",
+      timestamp: new Date().toISOString(),
+    }
+
+    setSales([...sales, sale])
+
     // Process the sale
     printReceipt()
     alert("Sale completed successfully!")
@@ -270,6 +336,21 @@ export default function SalesModule() {
 
       {/* Shopping Cart */}
       <div className="space-y-4">
+        {/* Recall Button - Always visible */}
+        <Card>
+          <CardContent className="p-4">
+            <Button
+              variant="outline"
+              className="w-full bg-transparent"
+              onClick={() => setShowHeldTransactions(true)}
+              disabled={heldTransactions.length === 0}
+            >
+              <Play className="h-4 w-4 mr-2" />
+              Recall Held Sales ({heldTransactions.length})
+            </Button>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -283,10 +364,8 @@ export default function SalesModule() {
               {cart.length > 0 && (
                 <div className="flex space-x-2">
                   <Button variant="outline" size="sm" onClick={holdTransaction}>
-                    On Hold
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowHeldTransactions(true)}>
-                    Recall ({heldTransactions.length})
+                    <Pause className="h-4 w-4 mr-1" />
+                    Hold
                   </Button>
                   <Button variant="outline" size="sm" onClick={voidTransaction}>
                     Void
@@ -465,7 +544,7 @@ export default function SalesModule() {
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Held Transactions</DialogTitle>
-            <DialogDescription>Select a transaction to recall</DialogDescription>
+            <DialogDescription>Select a transaction to recall or delete</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {heldTransactions.length === 0 ? (
@@ -473,7 +552,7 @@ export default function SalesModule() {
                 <p className="text-muted-foreground">No held transactions</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-96 overflow-y-auto">
                 {heldTransactions.map((transaction) => (
                   <Card key={transaction.id} className="cursor-pointer hover:shadow-md transition-shadow">
                     <CardContent className="p-4">
@@ -484,21 +563,16 @@ export default function SalesModule() {
                             {transaction.timestamp} - {transaction.cashier}
                           </p>
                           <p className="text-sm">
-                            {transaction.items.length} items - Total:{" "}
-                            {formatCurrency(
-                              transaction.items.reduce((sum, item) => sum + item.price * item.quantity, 0),
-                            )}
+                            {transaction.items.length} items - Total: {formatCurrency(transaction.total)}
                           </p>
                         </div>
                         <div className="flex space-x-2">
                           <Button size="sm" onClick={() => recallTransaction(transaction)}>
+                            <Play className="h-4 w-4 mr-1" />
                             Recall
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setHeldTransactions(heldTransactions.filter((t) => t.id !== transaction.id))}
-                          >
+                          <Button variant="outline" size="sm" onClick={() => deleteHeldTransaction(transaction.id)}>
+                            <Trash2 className="h-4 w-4 mr-1" />
                             Delete
                           </Button>
                         </div>

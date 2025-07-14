@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect, createContext } from "react"
+import type React from "react"
+
+import { useState, useEffect, createContext, useContext } from "react"
 
 interface User {
   id: string
@@ -15,11 +17,12 @@ interface AuthContextType {
   user: User | null
   login: (userId: string, password: string) => Promise<void>
   logout: () => void
+  hasPermission: (permission: string) => boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Mock users for demo
+// Mock users for demo with comprehensive permissions
 const DEMO_USERS: User[] = [
   {
     id: "1",
@@ -40,6 +43,8 @@ const DEMO_USERS: User[] = [
       "cash_management",
       "supplier_management",
       "customer_management",
+      "adjustments",
+      "export_reports",
     ],
   },
   {
@@ -48,7 +53,16 @@ const DEMO_USERS: User[] = [
     name: "Jane Supervisor",
     email: "supervisor@pos.com",
     role: "supervisor",
-    permissions: ["sales", "inventory", "reports", "price_override", "discount_approval", "cash_management"],
+    permissions: [
+      "sales",
+      "inventory",
+      "reports",
+      "price_override",
+      "discount_approval",
+      "cash_management",
+      "adjustments",
+      "export_reports",
+    ],
   },
   {
     id: "3",
@@ -58,16 +72,28 @@ const DEMO_USERS: User[] = [
     role: "seller",
     permissions: ["sales", "inventory"],
   },
+  {
+    id: "4",
+    userId: "SEL002",
+    name: "Alice Seller",
+    email: "alice@pos.com",
+    role: "seller",
+    permissions: ["sales", "inventory"],
+  },
 ]
 
-export function useAuth() {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
     // Check for stored user session
     const storedUser = localStorage.getItem("pos_user")
     if (storedUser) {
-      setUser(JSON.parse(storedUser))
+      try {
+        setUser(JSON.parse(storedUser))
+      } catch (error) {
+        localStorage.removeItem("pos_user")
+      }
     }
   }, [])
 
@@ -88,5 +114,24 @@ export function useAuth() {
     localStorage.removeItem("pos_user")
   }
 
-  return { user, login, logout }
+  const hasPermission = (permission: string) => {
+    return user?.permissions.includes(permission) || false
+  }
+
+  const value = {
+    user,
+    login,
+    logout,
+    hasPermission,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider")
+  }
+  return context
 }

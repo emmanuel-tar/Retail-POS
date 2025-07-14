@@ -3,18 +3,13 @@
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { format } from "date-fns"
-import { CalendarIcon, Download, FileText, Filter, Printer } from "lucide-react"
+import { Download, FileText, Printer, FileSpreadsheet } from "lucide-react"
 import { useCurrency } from "@/hooks/use-currency"
 
-// Mock data for reports
+// Mock data for comprehensive reports
 const purchaseReports = [
   {
     id: "PO-2024-001",
@@ -38,74 +33,59 @@ const purchaseReports = [
     status: "pending",
     total: 28000,
   },
-  {
-    id: "PO-2024-003",
-    date: "2024-01-20",
-    supplier: "Global Imports Inc",
-    items: [
-      { id: "5", name: "Rice 5kg", quantity: 15, unitPrice: 3000, total: 45000 },
-      { id: "6", name: "Cooking Oil 1L", quantity: 20, unitPrice: 1000, total: 20000 },
-    ],
-    status: "received",
-    total: 65000,
-  },
-  {
-    id: "PO-2024-004",
-    date: "2024-01-22",
-    supplier: "ABC Suppliers Ltd",
-    items: [
-      { id: "1", name: "Coca Cola 35cl", quantity: 100, unitPrice: 120, total: 12000 },
-      { id: "7", name: "Sprite 35cl", quantity: 50, unitPrice: 120, total: 6000 },
-    ],
-    status: "received",
-    total: 18000,
-  },
-  {
-    id: "PO-2024-005",
-    date: "2024-01-25",
-    supplier: "Local Distributors",
-    items: [
-      { id: "8", name: "Sugar 1kg", quantity: 30, unitPrice: 800, total: 24000 },
-      { id: "9", name: "Salt 500g", quantity: 40, unitPrice: 300, total: 12000 },
-    ],
-    status: "pending",
-    total: 36000,
-  },
 ]
 
 const salesReports = [
   {
-    id: "INV-2024-001",
+    id: "SALE-2024-001",
     date: "2024-01-15",
-    customer: "Walk-in Customer",
+    cashier: "John Seller",
     items: [
       { id: "1", name: "Coca Cola 35cl", quantity: 2, unitPrice: 200, total: 400 },
       { id: "2", name: "Indomie Noodles", quantity: 3, unitPrice: 150, total: 450 },
     ],
     paymentMethod: "cash",
-    total: 850,
+    subtotal: 850,
+    tax: 63.75,
+    total: 913.75,
   },
   {
-    id: "INV-2024-002",
+    id: "SALE-2024-002",
     date: "2024-01-15",
-    customer: "Walk-in Customer",
+    cashier: "Jane Seller",
     items: [
       { id: "3", name: "Peak Milk 400g", quantity: 1, unitPrice: 800, total: 800 },
       { id: "4", name: "Bread Loaf", quantity: 2, unitPrice: 500, total: 1000 },
     ],
     paymentMethod: "card",
-    total: 1800,
+    subtotal: 1800,
+    tax: 135,
+    total: 1935,
+  },
+]
+
+const adjustmentReports = [
+  {
+    id: "ADJ-2024-001",
+    date: "2024-01-16",
+    product: "Coca Cola 35cl",
+    type: "Stock Count",
+    previousQty: 50,
+    newQty: 48,
+    difference: -2,
+    reason: "Damaged items",
+    adjustedBy: "Manager",
   },
   {
-    id: "INV-2024-003",
-    date: "2024-01-16",
-    customer: "John Doe",
-    items: [
-      { id: "5", name: "Rice 5kg", quantity: 1, unitPrice: 3500, total: 3500 },
-      { id: "6", name: "Cooking Oil 1L", quantity: 2, unitPrice: 1200, total: 2400 },
-    ],
-    paymentMethod: "cash",
-    total: 5900,
+    id: "ADJ-2024-002",
+    date: "2024-01-17",
+    product: "Rice 5kg",
+    type: "Price Adjustment",
+    previousPrice: 3500,
+    newPrice: 3600,
+    difference: 100,
+    reason: "Supplier price increase",
+    adjustedBy: "Manager",
   },
 ]
 
@@ -132,44 +112,34 @@ const inventoryReports = [
     value: 9700,
     lastRestocked: "2024-01-15",
   },
-  {
-    id: "3",
-    name: "Peak Milk 400g",
-    category: "Dairy",
-    currentStock: 29,
-    minStock: 10,
-    costPrice: 600,
-    sellingPrice: 800,
-    value: 17400,
-    lastRestocked: "2024-01-18",
-  },
-  {
-    id: "4",
-    name: "Bread Loaf",
-    category: "Bakery",
-    currentStock: 23,
-    minStock: 10,
-    costPrice: 400,
-    sellingPrice: 500,
-    value: 9200,
-    lastRestocked: "2024-01-18",
-  },
-  {
-    id: "5",
-    name: "Rice 5kg",
-    category: "Grains",
-    currentStock: 14,
-    minStock: 5,
-    costPrice: 3000,
-    sellingPrice: 3500,
-    value: 42000,
-    lastRestocked: "2024-01-20",
-  },
 ]
+
+const financialReports = {
+  revenue: {
+    daily: 2848.75,
+    weekly: 19941.25,
+    monthly: 85632.5,
+  },
+  expenses: {
+    daily: 1200,
+    weekly: 8400,
+    monthly: 36000,
+  },
+  profit: {
+    daily: 1648.75,
+    weekly: 11541.25,
+    monthly: 49632.5,
+  },
+  topProducts: [
+    { name: "Coca Cola 35cl", revenue: 8000, quantity: 40 },
+    { name: "Rice 5kg", revenue: 7200, quantity: 2 },
+    { name: "Peak Milk 400g", revenue: 6400, quantity: 8 },
+  ],
+}
 
 export default function ReportsModule() {
   const { formatCurrency } = useCurrency()
-  const [activeTab, setActiveTab] = useState("purchases")
+  const [activeTab, setActiveTab] = useState("sales")
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,
@@ -206,8 +176,99 @@ export default function ReportsModule() {
     window.print()
   }
 
-  const handleExportReport = (format: string) => {
-    alert(`Exporting report as ${format}...`)
+  const exportToCSV = (data: any[], filename: string) => {
+    if (data.length === 0) return
+
+    const headers = Object.keys(data[0])
+    const csvContent = [
+      headers.join(","),
+      ...data.map((row) =>
+        headers
+          .map((header) => {
+            const value = row[header]
+            return typeof value === "string" && value.includes(",") ? `"${value}"` : value
+          })
+          .join(","),
+      ),
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", `${filename}.csv`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const exportToPDF = (reportType: string) => {
+    // In a real application, you would use a library like jsPDF
+    alert(`PDF export for ${reportType} would be implemented with a PDF library like jsPDF`)
+  }
+
+  const handleExportReport = (format: string, reportType: string) => {
+    let data: any[] = []
+    let filename = ""
+
+    switch (reportType) {
+      case "sales":
+        data = salesReports.map((sale) => ({
+          ID: sale.id,
+          Date: sale.date,
+          Cashier: sale.cashier,
+          Items: sale.items.length,
+          Subtotal: sale.subtotal,
+          Tax: sale.tax,
+          Total: sale.total,
+          Payment: sale.paymentMethod,
+        }))
+        filename = "sales-report"
+        break
+      case "purchases":
+        data = purchaseReports.map((purchase) => ({
+          ID: purchase.id,
+          Date: purchase.date,
+          Supplier: purchase.supplier,
+          Items: purchase.items.length,
+          Status: purchase.status,
+          Total: purchase.total,
+        }))
+        filename = "purchase-report"
+        break
+      case "adjustments":
+        data = adjustmentReports.map((adj) => ({
+          ID: adj.id,
+          Date: adj.date,
+          Product: adj.product,
+          Type: adj.type,
+          Difference: adj.difference,
+          Reason: adj.reason,
+          AdjustedBy: adj.adjustedBy,
+        }))
+        filename = "adjustment-report"
+        break
+      case "inventory":
+        data = inventoryReports.map((item) => ({
+          Product: item.name,
+          Category: item.category,
+          CurrentStock: item.currentStock,
+          MinStock: item.minStock,
+          CostPrice: item.costPrice,
+          SellingPrice: item.sellingPrice,
+          TotalValue: item.value,
+          LastRestocked: item.lastRestocked,
+        }))
+        filename = "inventory-report"
+        break
+    }
+
+    if (format === "csv") {
+      exportToCSV(data, filename)
+    } else if (format === "pdf") {
+      exportToPDF(reportType)
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -217,6 +278,19 @@ export default function ReportsModule() {
       case "received":
         return "bg-green-100 text-green-800"
       case "cancelled":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getAdjustmentTypeColor = (type: string) => {
+    switch (type) {
+      case "Stock Count":
+        return "bg-blue-100 text-blue-800"
+      case "Price Adjustment":
+        return "bg-purple-100 text-purple-800"
+      case "Damage":
         return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
@@ -238,108 +312,148 @@ export default function ReportsModule() {
             <Printer className="h-4 w-4 mr-2" />
             Print
           </Button>
-          <Select onValueChange={handleExportReport}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Export Report" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pdf">Export as PDF</SelectItem>
-              <SelectItem value="excel">Export as Excel</SelectItem>
-              <SelectItem value="csv">Export as CSV</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="purchases">Purchase Reports</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="sales">Sales Reports</TabsTrigger>
+          <TabsTrigger value="purchases">Purchase Reports</TabsTrigger>
+          <TabsTrigger value="adjustments">Adjustments</TabsTrigger>
           <TabsTrigger value="inventory">Inventory Reports</TabsTrigger>
           <TabsTrigger value="financial">Financial Reports</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="purchases" className="space-y-4">
+        <TabsContent value="sales" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Purchase Reports</CardTitle>
-              <CardDescription>View and analyze purchase orders and invoices</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label>Date Range</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent">
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange.from ? (
-                          dateRange.to ? (
-                            <>
-                              {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}
-                            </>
-                          ) : (
-                            format(dateRange.from, "LLL dd, y")
-                          )
-                        ) : (
-                          <span>Pick a date range</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        initialFocus
-                        mode="range"
-                        defaultMonth={new Date()}
-                        selected={dateRange}
-                        onSelect={setDateRange}
-                        numberOfMonths={2}
-                      />
-                    </PopoverContent>
-                  </Popover>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Sales Reports</CardTitle>
+                  <CardDescription>View and analyze sales transactions</CardDescription>
                 </div>
-
-                <div className="space-y-2">
-                  <Label>Supplier</Label>
-                  <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Suppliers" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Suppliers</SelectItem>
-                      {suppliers.map((supplier) => (
-                        <SelectItem key={supplier} value={supplier}>
-                          {supplier}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="received">Received</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-end">
-                  <Button variant="outline" className="w-full bg-transparent">
-                    <Filter className="h-4 w-4 mr-2" />
-                    Apply Filters
+                <div className="flex space-x-2">
+                  <Button variant="outline" onClick={() => handleExportReport("csv", "sales")}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </Button>
+                  <Button variant="outline" onClick={() => handleExportReport("pdf", "sales")}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export PDF
                   </Button>
                 </div>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="py-4">
+                    <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{salesReports.length}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="py-4">
+                    <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {formatCurrency(salesReports.reduce((sum, sale) => sum + sale.total, 0))}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="py-4">
+                    <CardTitle className="text-sm font-medium">Average Sale</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {formatCurrency(
+                        salesReports.length > 0
+                          ? salesReports.reduce((sum, sale) => sum + sale.total, 0) / salesReports.length
+                          : 0,
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="py-4">
+                    <CardTitle className="text-sm font-medium">Total Tax</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {formatCurrency(salesReports.reduce((sum, sale) => sum + sale.tax, 0))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
+              {/* Sales Reports Table */}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sale ID</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Cashier</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead>Subtotal</TableHead>
+                    <TableHead>Tax</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {salesReports.map((sale) => (
+                    <TableRow key={sale.id}>
+                      <TableCell className="font-medium">{sale.id}</TableCell>
+                      <TableCell>{sale.date}</TableCell>
+                      <TableCell>{sale.cashier}</TableCell>
+                      <TableCell>{sale.items.length} items</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{sale.paymentMethod}</Badge>
+                      </TableCell>
+                      <TableCell>{formatCurrency(sale.subtotal)}</TableCell>
+                      <TableCell>{formatCurrency(sale.tax)}</TableCell>
+                      <TableCell>{formatCurrency(sale.total)}</TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" onClick={() => handleViewReport(sale)}>
+                          <FileText className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="purchases" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Purchase Reports</CardTitle>
+                  <CardDescription>View and analyze purchase orders and invoices</CardDescription>
+                </div>
+                <div className="flex space-x-2">
+                  <Button variant="outline" onClick={() => handleExportReport("csv", "purchases")}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </Button>
+                  <Button variant="outline" onClick={() => handleExportReport("pdf", "purchases")}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export PDF
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
               {/* Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>
@@ -413,130 +527,63 @@ export default function ReportsModule() {
               </Table>
             </CardContent>
           </Card>
-
-          {/* Purchase Report Details */}
-          {showReportDetails && selectedReport && (
-            <Card className="print:block" id="report-details">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Purchase Order Details</CardTitle>
-                  <CardDescription>Order ID: {selectedReport.id}</CardDescription>
-                </div>
-                <div className="flex space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => setShowReportDetails(false)}>
-                    Close
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handlePrintReport}>
-                    <Printer className="h-4 w-4 mr-1" />
-                    Print
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleExportReport("pdf")}>
-                    <Download className="h-4 w-4 mr-1" />
-                    Export
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground">Order Information</h3>
-                    <div className="mt-1 space-y-1">
-                      <p>
-                        <span className="font-medium">Order ID:</span> {selectedReport.id}
-                      </p>
-                      <p>
-                        <span className="font-medium">Date:</span> {selectedReport.date}
-                      </p>
-                      <p>
-                        <span className="font-medium">Status:</span>{" "}
-                        <Badge className={getStatusColor(selectedReport.status)}>{selectedReport.status}</Badge>
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground">Supplier Information</h3>
-                    <div className="mt-1 space-y-1">
-                      <p>
-                        <span className="font-medium">Supplier:</span> {selectedReport.supplier}
-                      </p>
-                      <p>
-                        <span className="font-medium">Contact:</span> +234 123 456 7890
-                      </p>
-                      <p>
-                        <span className="font-medium">Email:</span> contact@
-                        {selectedReport.supplier.toLowerCase().replace(/\s+/g, "")}.com
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Order Items</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead className="text-right">Unit Price</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedReport.items.map((item: any) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-right font-medium">
-                          Subtotal
-                        </TableCell>
-                        <TableCell className="text-right font-medium">{formatCurrency(selectedReport.total)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-right font-medium">
-                          Tax (0%)
-                        </TableCell>
-                        <TableCell className="text-right font-medium">{formatCurrency(0)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-right font-bold">
-                          Total
-                        </TableCell>
-                        <TableCell className="text-right font-bold">{formatCurrency(selectedReport.total)}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Notes</h3>
-                  <p className="text-sm text-muted-foreground">
-                    This purchase order was created on {selectedReport.date}. Please contact the supplier for any
-                    inquiries regarding this order.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
 
-        <TabsContent value="sales" className="space-y-4">
+        <TabsContent value="adjustments" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Sales Reports</CardTitle>
-              <CardDescription>View and analyze sales transactions</CardDescription>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Adjustment Reports</CardTitle>
+                  <CardDescription>View inventory and price adjustments</CardDescription>
+                </div>
+                <div className="flex space-x-2">
+                  <Button variant="outline" onClick={() => handleExportReport("csv", "adjustments")}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </Button>
+                  <Button variant="outline" onClick={() => handleExportReport("pdf", "adjustments")}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export PDF
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Sales reports are available but not shown in this preview.</p>
-                <p className="text-sm text-muted-foreground">
-                  The structure is similar to purchase reports with sales-specific data.
-                </p>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Adjustment ID</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Difference</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead>Adjusted By</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {adjustmentReports.map((adjustment) => (
+                    <TableRow key={adjustment.id}>
+                      <TableCell className="font-medium">{adjustment.id}</TableCell>
+                      <TableCell>{adjustment.date}</TableCell>
+                      <TableCell>{adjustment.product}</TableCell>
+                      <TableCell>
+                        <Badge className={getAdjustmentTypeColor(adjustment.type)}>{adjustment.type}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className={adjustment.difference > 0 ? "text-green-600" : "text-red-600"}>
+                          {adjustment.type === "Price Adjustment"
+                            ? formatCurrency(adjustment.difference)
+                            : adjustment.difference}
+                        </span>
+                      </TableCell>
+                      <TableCell>{adjustment.reason}</TableCell>
+                      <TableCell>{adjustment.adjustedBy}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -544,8 +591,22 @@ export default function ReportsModule() {
         <TabsContent value="inventory" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Inventory Reports</CardTitle>
-              <CardDescription>View and analyze inventory levels and values</CardDescription>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Inventory Reports</CardTitle>
+                  <CardDescription>View and analyze inventory levels and values</CardDescription>
+                </div>
+                <div className="flex space-x-2">
+                  <Button variant="outline" onClick={() => handleExportReport("csv", "inventory")}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </Button>
+                  <Button variant="outline" onClick={() => handleExportReport("pdf", "inventory")}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export PDF
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Summary Cards */}
@@ -624,16 +685,117 @@ export default function ReportsModule() {
         <TabsContent value="financial" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Financial Reports</CardTitle>
-              <CardDescription>View and analyze financial performance</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Financial reports are available but not shown in this preview.</p>
-                <p className="text-sm text-muted-foreground">
-                  These would include profit & loss statements, expense reports, and more.
-                </p>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Financial Reports</CardTitle>
+                  <CardDescription>View and analyze financial performance</CardDescription>
+                </div>
+                <div className="flex space-x-2">
+                  <Button variant="outline" onClick={() => exportToCSV([financialReports], "financial-report")}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </Button>
+                  <Button variant="outline" onClick={() => exportToPDF("financial")}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export PDF
+                  </Button>
+                </div>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Revenue, Expenses, Profit Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Revenue</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between">
+                      <span>Daily:</span>
+                      <span className="font-bold">{formatCurrency(financialReports.revenue.daily)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Weekly:</span>
+                      <span className="font-bold">{formatCurrency(financialReports.revenue.weekly)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Monthly:</span>
+                      <span className="font-bold">{formatCurrency(financialReports.revenue.monthly)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Expenses</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between">
+                      <span>Daily:</span>
+                      <span className="font-bold text-red-600">{formatCurrency(financialReports.expenses.daily)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Weekly:</span>
+                      <span className="font-bold text-red-600">{formatCurrency(financialReports.expenses.weekly)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Monthly:</span>
+                      <span className="font-bold text-red-600">
+                        {formatCurrency(financialReports.expenses.monthly)}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Profit</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between">
+                      <span>Daily:</span>
+                      <span className="font-bold text-green-600">{formatCurrency(financialReports.profit.daily)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Weekly:</span>
+                      <span className="font-bold text-green-600">{formatCurrency(financialReports.profit.weekly)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Monthly:</span>
+                      <span className="font-bold text-green-600">
+                        {formatCurrency(financialReports.profit.monthly)}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Top Products */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top Performing Products</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-right">Revenue</TableHead>
+                        <TableHead className="text-right">Quantity Sold</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {financialReports.topProducts.map((product, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{product.name}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(product.revenue)}</TableCell>
+                          <TableCell className="text-right">{product.quantity}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             </CardContent>
           </Card>
         </TabsContent>

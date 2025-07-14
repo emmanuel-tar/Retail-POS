@@ -1,41 +1,107 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ShoppingCart, Package, TrendingUp, AlertTriangle } from "lucide-react"
-import LoginForm from "@/components/login-form"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {
+  ShoppingCart,
+  Package,
+  FileText,
+  Users,
+  Settings,
+  TrendingUp,
+  LogOut,
+  DollarSign,
+  Activity,
+} from "lucide-react"
+
 import SalesModule from "@/components/sales-module"
-import PurchaseModule from "@/components/purchase-module"
-import EnhancedUserManagement from "@/components/enhanced-user-management"
-import SettingsModule from "@/components/settings-module"
 import InventoryModule from "@/components/inventory-module"
 import ReportsModule from "@/components/reports-module"
+import EnhancedUserManagement from "@/components/enhanced-user-management"
+import PurchaseModule from "@/components/purchase-module"
 import SupplierModule from "@/components/supplier-module"
+import SettingsModule from "@/components/settings-module"
+import LoginForm from "@/components/login-form"
 import { useAuth } from "@/hooks/use-auth"
 import { useCurrency } from "@/hooks/use-currency"
 
 export default function POSSystem() {
-  const { user, logout } = useAuth()
+  const { user, logout, hasPermission } = useAuth()
   const { formatCurrency } = useCurrency()
-  const [activeTab, setActiveTab] = useState("sales")
+  const [activeModule, setActiveModule] = useState("sales")
 
-  // Mock data for dashboard
-  const dashboardStats = {
-    todaySales: 125000,
-    totalProducts: 450,
-    lowStockItems: 12,
-    pendingOrders: 8,
-  }
-
+  // Redirect to login if not authenticated
   if (!user) {
     return <LoginForm />
   }
 
-  const hasPermission = (permission: string) => {
-    return user.permissions.includes(permission) || user.role === "manager"
+  // Mock dashboard data
+  const dashboardData = {
+    todaySales: 15420.5,
+    totalProducts: 156,
+    lowStockItems: 8,
+    pendingOrders: 3,
+    recentSales: [
+      { id: "SALE-001", amount: 450.75, time: "10:30 AM" },
+      { id: "SALE-002", amount: 1200.0, time: "11:15 AM" },
+      { id: "SALE-003", amount: 325.5, time: "12:00 PM" },
+    ],
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+  }
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case "manager":
+        return "bg-purple-100 text-purple-800"
+      case "supervisor":
+        return "bg-blue-100 text-blue-800"
+      case "seller":
+        return "bg-green-100 text-green-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const availableModules = [
+    { id: "sales", label: "Sales", icon: ShoppingCart, permission: "sales" },
+    { id: "inventory", label: "Inventory", icon: Package, permission: "inventory" },
+    { id: "purchase", label: "Purchase", icon: TrendingUp, permission: "purchase" },
+    { id: "suppliers", label: "Suppliers", icon: Users, permission: "supplier_management" },
+    { id: "reports", label: "Reports", icon: FileText, permission: "reports" },
+    { id: "users", label: "User Management", icon: Users, permission: "user_management" },
+    { id: "settings", label: "Settings", icon: Settings, permission: "settings" },
+  ].filter((module) => hasPermission(module.permission))
+
+  const renderModule = () => {
+    switch (activeModule) {
+      case "sales":
+        return <SalesModule />
+      case "inventory":
+        return <InventoryModule />
+      case "purchase":
+        return <PurchaseModule />
+      case "suppliers":
+        return <SupplierModule />
+      case "reports":
+        return <ReportsModule />
+      case "users":
+        return <EnhancedUserManagement />
+      case "settings":
+        return <SettingsModule />
+      default:
+        return <SalesModule />
+    }
   }
 
   return (
@@ -45,14 +111,29 @@ export default function POSSystem() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">POS System</h1>
-              <Badge variant="secondary" className="ml-3">
-                {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-              </Badge>
+              <div className="flex-shrink-0">
+                <h1 className="text-xl font-bold text-gray-900">POS System</h1>
+              </div>
             </div>
+
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">Welcome, {user.name}</span>
-              <Button variant="outline" onClick={logout}>
+              <div className="flex items-center space-x-2">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="text-xs">{getInitials(user.name)}</AvatarFallback>
+                </Avatar>
+                <div className="hidden md:block">
+                  <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                  <div className="flex items-center space-x-2">
+                    <Badge className={getRoleColor(user.role)} variant="secondary">
+                      {user.role}
+                    </Badge>
+                    <span className="text-xs text-gray-500">{user.userId}</span>
+                  </div>
+                </div>
+              </div>
+
+              <Button variant="outline" size="sm" onClick={logout}>
+                <LogOut className="h-4 w-4 mr-2" />
                 Logout
               </Button>
             </div>
@@ -61,100 +142,97 @@ export default function POSSystem() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Dashboard Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today's Sales</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(dashboardStats.todaySales)}</div>
-              <p className="text-xs text-muted-foreground">+12% from yesterday</p>
-            </CardContent>
-          </Card>
+        {/* Dashboard Overview - Only show on sales module */}
+        {activeModule === "sales" && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard Overview</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Today's Sales</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCurrency(dashboardData.todaySales)}</div>
+                  <p className="text-xs text-muted-foreground">+12% from yesterday</p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{dashboardStats.totalProducts}</div>
-              <p className="text-xs text-muted-foreground">Active inventory items</p>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+                  <Package className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboardData.totalProducts}</div>
+                  <p className="text-xs text-muted-foreground">Active inventory items</p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Low Stock Alert</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-orange-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-500">{dashboardStats.lowStockItems}</div>
-              <p className="text-xs text-muted-foreground">Items need restocking</p>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Low Stock Alert</CardTitle>
+                  <Activity className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-600">{dashboardData.lowStockItems}</div>
+                  <p className="text-xs text-muted-foreground">Items need restocking</p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{dashboardStats.pendingOrders}</div>
-              <p className="text-xs text-muted-foreground">Purchase orders</p>
-            </CardContent>
-          </Card>
-        </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboardData.pendingOrders}</div>
+                  <p className="text-xs text-muted-foreground">Purchase orders</p>
+                </CardContent>
+              </Card>
+            </div>
 
-        {/* Main Content */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="sales">Sales</TabsTrigger>
-            <TabsTrigger value="inventory">Inventory</TabsTrigger>
-            {hasPermission("purchase") && <TabsTrigger value="purchase">Purchase</TabsTrigger>}
-            {hasPermission("supplier_management") && <TabsTrigger value="suppliers">Suppliers</TabsTrigger>}
-            {hasPermission("reports") && <TabsTrigger value="reports">Reports</TabsTrigger>}
-            {hasPermission("user_management") && <TabsTrigger value="users">Users</TabsTrigger>}
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+            {/* Recent Sales */}
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle>Recent Sales</CardTitle>
+                <CardDescription>Latest transactions from today</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {dashboardData.recentSales.map((sale) => (
+                    <div key={sale.id} className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{sale.id}</p>
+                        <p className="text-sm text-muted-foreground">{sale.time}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">{formatCurrency(sale.amount)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Module Navigation */}
+        <Tabs value={activeModule} onValueChange={setActiveModule} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-7 gap-2">
+            {availableModules.map((module) => (
+              <TabsTrigger key={module.id} value={module.id} className="flex items-center space-x-2">
+                <module.icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{module.label}</span>
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <TabsContent value="sales" className="space-y-4">
-            <SalesModule />
-          </TabsContent>
-
-          <TabsContent value="inventory" className="space-y-4">
-            <InventoryModule />
-          </TabsContent>
-
-          {hasPermission("purchase") && (
-            <TabsContent value="purchase" className="space-y-4">
-              <PurchaseModule />
+          {availableModules.map((module) => (
+            <TabsContent key={module.id} value={module.id}>
+              {renderModule()}
             </TabsContent>
-          )}
-
-          {hasPermission("supplier_management") && (
-            <TabsContent value="suppliers" className="space-y-4">
-              <SupplierModule />
-            </TabsContent>
-          )}
-
-          {hasPermission("reports") && (
-            <TabsContent value="reports" className="space-y-4">
-              <ReportsModule />
-            </TabsContent>
-          )}
-
-          {hasPermission("user_management") && (
-            <TabsContent value="users" className="space-y-4">
-              <EnhancedUserManagement />
-            </TabsContent>
-          )}
-
-          <TabsContent value="settings" className="space-y-4">
-            <SettingsModule />
-          </TabsContent>
+          ))}
         </Tabs>
       </div>
     </div>
