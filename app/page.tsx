@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Home, ShoppingCart, Package, Users, BarChart, Settings, Truck, Building } from "lucide-react"
+import { Home, ShoppingCart, Package, Users, BarChart, Settings, Truck, Building, FileText } from "lucide-react"
 import SalesModule from "@/components/sales-module"
 import InventoryModule from "@/components/inventory-module"
 import AdvancedReports from "@/components/advanced-reports"
@@ -12,16 +12,20 @@ import PurchaseModule from "@/components/purchase-module"
 import SupplierModule from "@/components/supplier-module"
 import SettingsModule from "@/components/settings-module"
 import StoreManagement from "@/components/store-management"
+import ChangeLogViewer from "@/components/change-log-viewer"
 import LoginForm from "@/components/login-form"
 import { AuthProvider, useAuth } from "@/hooks/use-auth"
 import { StoreProvider } from "@/hooks/use-store"
+import { ChangeLogProvider } from "@/hooks/use-change-log"
 
 export default function HomeDashboard() {
   return (
     <AuthProvider>
-      <StoreProvider>
-        <AppContent />
-      </StoreProvider>
+      <ChangeLogProvider>
+        <StoreProvider>
+          <AppContent />
+        </StoreProvider>
+      </ChangeLogProvider>
     </AuthProvider>
   )
 }
@@ -50,6 +54,8 @@ function AppContent() {
         return <SupplierModule />
       case "stores":
         return <StoreManagement />
+      case "changelog":
+        return <ChangeLogViewer />
       case "settings":
         return <SettingsModule />
       default:
@@ -60,6 +66,11 @@ function AppContent() {
   return (
     <div className="flex min-h-screen w-full">
       <aside className="flex flex-col items-center gap-4 border-r bg-background px-2 py-6">
+        <div className="text-center mb-4">
+          <div className="text-xs font-medium text-gray-600">{user.storeName}</div>
+          <div className="text-xs text-gray-400">Store: {user.storeCode}</div>
+        </div>
+
         <nav className="grid gap-1">
           <Button
             variant={activeModule === "sales" ? "secondary" : "ghost"}
@@ -97,15 +108,17 @@ function AppContent() {
           >
             <Home className="h-5 w-5" />
           </Button>
-          <Button
-            variant={activeModule === "stores" ? "secondary" : "ghost"}
-            size="icon"
-            className="rounded-lg"
-            aria-label="Stores"
-            onClick={() => setActiveModule("stores")}
-          >
-            <Building className="h-5 w-5" />
-          </Button>
+          {user.isMainStore && (
+            <Button
+              variant={activeModule === "stores" ? "secondary" : "ghost"}
+              size="icon"
+              className="rounded-lg"
+              aria-label="Stores"
+              onClick={() => setActiveModule("stores")}
+            >
+              <Building className="h-5 w-5" />
+            </Button>
+          )}
           <Button
             variant={activeModule === "reports" ? "secondary" : "ghost"}
             size="icon"
@@ -114,6 +127,15 @@ function AppContent() {
             onClick={() => setActiveModule("reports")}
           >
             <BarChart className="h-5 w-5" />
+          </Button>
+          <Button
+            variant={activeModule === "changelog" ? "secondary" : "ghost"}
+            size="icon"
+            className="rounded-lg"
+            aria-label="Change Log"
+            onClick={() => setActiveModule("changelog")}
+          >
+            <FileText className="h-5 w-5" />
           </Button>
           <Button
             variant={activeModule === "users" ? "secondary" : "ghost"}
