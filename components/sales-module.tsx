@@ -1,12 +1,10 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -15,10 +13,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { useToast } from "@/components/ui/use-toast"
-import { useCurrency } from "@/hooks/use-currency"
-import { Loader2, PlusCircle, MinusCircle, Trash2, Save, Receipt, XCircle } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
+import { useCurrency } from "@/hooks/use-currency"
+import { Loader2, PlusCircle, MinusCircle, XCircle, DollarSign, Save, RotateCcw } from "lucide-react"
 
 interface Product {
   id: string
@@ -30,79 +28,45 @@ interface Product {
 
 interface CartItem extends Product {
   quantity: number
-  itemTotal: number
+  subtotal: number
 }
 
 interface HeldTransaction {
   id: string
-  hold_name: string
-  held_data: {
-    cart: CartItem[]
-    total: number
-  }
-  created_at: string
+  transaction_name: string
+  cashier_id: string
+  items: CartItem[]
+  total_amount: number
+  held_at: string
+  notes?: string
 }
 
 export default function SalesModule() {
-  const { user, hasPermission } = useAuth()
+  const { user } = useAuth()
   const { toast } = useToast()
   const { formatCurrency } = useCurrency()
 
   const [searchTerm, setSearchTerm] = useState("")
-  const [products, setProducts] = useState<Product[]>([])
+  const [products, setProducts] = useState<Product[]>([
+    { id: "prod-001", sku: "LP-001", name: "Laptop Pro", price: 1200.0, stock_quantity: 50 },
+    { id: "prod-002", sku: "WM-002", name: "Wireless Mouse", price: 25.5, stock_quantity: 200 },
+    { id: "prod-003", sku: "MK-003", name: "Mechanical Keyboard", price: 85.0, stock_quantity: 100 },
+    { id: "prod-004", sku: "UCH-004", name: "USB-C Hub", price: 40.0, stock_quantity: 150 },
+    { id: "prod-005", sku: "SSD-005", name: "External SSD 1TB", price: 150.0, stock_quantity: 75 },
+  ])
   const [cart, setCart] = useState<CartItem[]>([])
   const [total, setTotal] = useState(0)
+  const [paymentMethod, setPaymentMethod] = useState("cash")
   const [isProcessingSale, setIsProcessingSale] = useState(false)
   const [heldTransactions, setHeldTransactions] = useState<HeldTransaction[]>([])
   const [isHoldingSale, setIsHoldingSale] = useState(false)
   const [holdName, setHoldName] = useState("")
   const [isRecallingSale, setIsRecallingSale] = useState(false)
 
-  const fetchProducts = useCallback(async () => {
-    try {
-      const response = await fetch("/api/products")
-      if (!response.ok) throw new Error("Failed to fetch products")
-      const data = await response.json()
-      setProducts(data)
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load products. Please try again.",
-        variant: "destructive",
-      })
-      console.error("Error fetching products:", error)
-    }
-  }, [toast])
-
-  const fetchHeldTransactions = useCallback(async () => {
-    try {
-      const response = await fetch("/api/held-transactions")
-      if (!response.ok) throw new Error("Failed to fetch held transactions")
-      const data = await response.json()
-      setHeldTransactions(data)
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load held transactions.",
-        variant: "destructive",
-      })
-      console.error("Error fetching held transactions:", error)
-    }
-  }, [toast])
-
   useEffect(() => {
-    fetchProducts()
-    fetchHeldTransactions()
-  }, [fetchProducts, fetchHeldTransactions])
-
-  useEffect(() => {
-    const newTotal = cart.reduce((sum, item) => sum + item.itemTotal, 0)
+    const newTotal = cart.reduce((sum, item) => sum + item.subtotal, 0)
     setTotal(newTotal)
   }, [cart])
-
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value)
-  }
 
   const filteredProducts = products.filter(
     (product) =>
@@ -114,89 +78,121 @@ export default function SalesModule() {
     setCart((prevCart) => {
       const existingItem = prevCart.find((item) => item.id === product.id)
       if (existingItem) {
-        const updatedCart = prevCart.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1, itemTotal: (item.quantity + 1) * item.price }
-            : item,
+        const newQuantity = existingItem.quantity + 1
+        if (newQuantity > product.stock_quantity) {
+          toast({
+            title: "Out of Stock",
+            description: `Cannot add more ${product.name}. Only ${product.stock_quantity} left in stock.`,
+            variant: "destructive",
+          })
+          return prevCart
+        }
+        return prevCart.map((item) =>
+          item.id === product.id ? { ...item, quantity: newQuantity, subtotal: newQuantity * item.price } : item,
         )
-        return updatedCart
       } else {
-        return [...prevCart, { ...product, quantity: 1, itemTotal: product.price }]
+        if (product.stock_quantity === 0) {
+          toast({
+            title: "Out of Stock",
+            description: `${product.name} is currently out of stock.`,
+            variant: "destructive",
+          })
+          return prevCart
+        }
+        return [...prevCart, { ...product, quantity: 1, subtotal: product.price }]
       }
     })
     setSearchTerm("") // Clear search after adding
   }
 
-  const updateCartQuantity = (productId: string, delta: number) => {
+  const updateCartQuantity = (itemId: string, delta: number) => {
     setCart((prevCart) => {
       const updatedCart = prevCart
-        .map((item) =>
-          item.id === productId
-            ? { ...item, quantity: item.quantity + delta, itemTotal: (item.quantity + delta) * item.price }
-            : item,
-        )
-        .filter((item) => item.quantity > 0) // Remove if quantity drops to 0 or less
+        .map((item) => {
+          if (item.id === itemId) {
+            const newQuantity = item.quantity + delta
+            const productInStock = products.find((p) => p.id === itemId)
+            if (!productInStock) return item // Should not happen
+
+            if (newQuantity > productInStock.stock_quantity) {
+              toast({
+                title: "Out of Stock",
+                description: `Cannot add more ${item.name}. Only ${productInStock.stock_quantity} left in stock.`,
+                variant: "destructive",
+              })
+              return item
+            }
+
+            if (newQuantity <= 0) {
+              return null // Mark for removal
+            }
+            return { ...item, quantity: newQuantity, subtotal: newQuantity * item.price }
+          }
+          return item
+        })
+        .filter(Boolean) as CartItem[] // Remove nulls
+
       return updatedCart
     })
   }
 
-  const removeFromCart = (productId: string) => {
-    setCart((prevCart) => prevCart.filter((item) => item.id !== productId))
+  const removeFromCart = (itemId: string) => {
+    setCart((prevCart) => prevCart.filter((item) => item.id !== itemId))
+  }
+
+  const clearCart = () => {
+    setCart([])
+    setTotal(0)
+    setPaymentMethod("cash")
   }
 
   const processSale = async () => {
     if (cart.length === 0) {
       toast({
-        title: "No items in cart",
+        title: "Empty Cart",
         description: "Please add items to the cart before processing a sale.",
-        variant: "warning",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!user?.id) {
+      toast({
+        title: "Authentication Error",
+        description: "Cashier ID not found. Please log in again.",
+        variant: "destructive",
       })
       return
     }
 
     setIsProcessingSale(true)
     try {
-      const saleItems = cart.map((item) => ({
-        product_id: item.id,
-        quantity: item.quantity,
-        unit_price: item.price,
-        item_total: item.itemTotal,
-      }))
+      // Simulate API call delay
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      const response = await fetch("/api/sales", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          total_amount: total,
-          discount_amount: 0, // Placeholder
-          tax_amount: 0, // Placeholder
-          payment_method: "Cash", // Placeholder
-          user_id: user?.id, // Current logged-in user ID
-          items: saleItems,
+      // Update product stock in local state
+      setProducts((prevProducts) =>
+        prevProducts.map((product) => {
+          const cartItem = cart.find((item) => item.id === product.id)
+          if (cartItem) {
+            return { ...product, stock_quantity: product.stock_quantity - cartItem.quantity }
+          }
+          return product
         }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to process sale")
-      }
+      )
 
       toast({
-        title: "Sale Processed!",
-        description: `Total: ${formatCurrency(total)}. Stock updated.`,
+        title: "Sale Processed",
+        description: `Sale completed successfully! Total: ${formatCurrency(total)}`,
       })
-      setCart([])
-      setTotal(0)
-      fetchProducts() // Refresh product stock
+      clearCart()
     } catch (error) {
+      console.error("Error processing sale:", error)
       toast({
-        title: "Sale Error",
-        description: `Failed to process sale: ${error instanceof Error ? error.message : "Unknown error"}`,
+        title: "Sale Failed",
+        description: "There was an error processing the sale.",
         variant: "destructive",
       })
-      console.error("Error processing sale:", error)
     } finally {
       setIsProcessingSale(false)
     }
@@ -205,320 +201,271 @@ export default function SalesModule() {
   const holdSale = async () => {
     if (cart.length === 0) {
       toast({
-        title: "No items to hold",
-        description: "Add items to the cart before holding a sale.",
-        variant: "warning",
+        title: "Empty Cart",
+        description: "Please add items to the cart before holding a sale.",
+        variant: "destructive",
       })
       return
     }
 
-    if (!holdName.trim()) {
+    if (!user?.id) {
       toast({
-        title: "Hold Name Required",
-        description: "Please provide a name for the held transaction.",
-        variant: "warning",
+        title: "Authentication Error",
+        description: "Cashier ID not found. Please log in again.",
+        variant: "destructive",
       })
       return
     }
 
     setIsHoldingSale(true)
     try {
-      const response = await fetch("/api/held-transactions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          hold_name: holdName,
-          held_data: { cart, total },
-        }),
-      })
+      // Simulate API call delay
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to hold sale")
+      const newHeldTransaction: HeldTransaction = {
+        id: Date.now().toString(), // Simple unique ID
+        transaction_name: holdName || `Held Sale ${new Date().toLocaleString()}`,
+        cashier_id: user.id,
+        items: cart,
+        total_amount: total,
+        held_at: new Date().toISOString(),
+        notes: `Held by ${user.username}`,
       }
+      setHeldTransactions((prev) => [...prev, newHeldTransaction])
 
       toast({
         title: "Sale Held",
-        description: `Transaction "${holdName}" has been held.`,
+        description: `Transaction "${newHeldTransaction.transaction_name}" has been held.`,
       })
-      setCart([])
-      setTotal(0)
+      clearCart()
       setHoldName("")
-      fetchHeldTransactions() // Refresh held transactions list
     } catch (error) {
+      console.error("Error holding sale:", error)
       toast({
-        title: "Hold Sale Error",
-        description: `Failed to hold sale: ${error instanceof Error ? error.message : "Unknown error"}`,
+        title: "Hold Failed",
+        description: "There was an error holding the sale.",
         variant: "destructive",
       })
-      console.error("Error holding sale:", error)
     } finally {
       setIsHoldingSale(false)
     }
   }
 
-  const recallSale = (heldTransaction: HeldTransaction) => {
-    setCart(heldTransaction.held_data.cart)
-    setTotal(heldTransaction.held_data.total)
-    setHoldName(heldTransaction.hold_name) // Pre-fill hold name for potential re-holding
-    toast({
-      title: "Sale Recalled",
-      description: `Transaction "${heldTransaction.hold_name}" has been loaded.`,
-    })
-  }
-
-  const deleteHeldTransaction = async (id: string) => {
+  const recallSale = async (heldTransaction: HeldTransaction) => {
+    setIsRecallingSale(true)
     try {
-      const response = await fetch(`/api/held-transactions/${id}`, {
-        method: "DELETE",
-      })
+      // Simulate API call delay
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to delete held transaction")
-      }
+      setCart(heldTransaction.items)
+      setTotal(heldTransaction.total_amount)
+      setPaymentMethod("cash") // Reset payment method
+      setHeldTransactions((prev) => prev.filter((t) => t.id !== heldTransaction.id)) // Remove from held list
 
       toast({
-        title: "Held Transaction Deleted",
-        description: "The held transaction has been removed.",
+        title: "Sale Recalled",
+        description: `Transaction "${heldTransaction.transaction_name}" recalled successfully.`,
       })
-      fetchHeldTransactions() // Refresh held transactions list
     } catch (error) {
+      console.error("Error recalling sale:", error)
       toast({
-        title: "Delete Error",
-        description: `Failed to delete held transaction: ${error instanceof Error ? error.message : "Unknown error"}`,
+        title: "Recall Error",
+        description: "Could not recall sale.",
         variant: "destructive",
       })
-      console.error("Error deleting held transaction:", error)
+    } finally {
+      setIsRecallingSale(false)
     }
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-120px)]">
       {/* Product Search & List */}
-      <Card className="lg:col-span-2">
+      <Card className="lg:col-span-2 flex flex-col">
         <CardHeader>
           <CardTitle>Products</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-1 overflow-auto">
           <Input
             placeholder="Search products by name or SKU..."
             value={searchTerm}
-            onChange={handleSearch}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="mb-4"
           />
-          <div className="max-h-[400px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SKU</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Stock</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredProducts.map((product) => (
+                <TableRow key={product.id}>
+                  <TableCell>{product.sku}</TableCell>
+                  <TableCell>{product.name}</TableCell>
+                  <TableCell>{formatCurrency(product.price)}</TableCell>
+                  <TableCell>{product.stock_quantity}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addToCart(product)}
+                      disabled={product.stock_quantity === 0}
+                    >
+                      Add to Cart
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell>{product.sku}</TableCell>
-                    <TableCell>{product.name}</TableCell>
-                    <TableCell>{formatCurrency(product.price)}</TableCell>
-                    <TableCell>{product.stock_quantity}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => addToCart(product)}
-                        disabled={product.stock_quantity <= 0}
-                      >
-                        <PlusCircle className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
       {/* Cart & Checkout */}
-      <Card className="lg:col-span-1">
+      <Card className="flex flex-col">
         <CardHeader>
           <CardTitle>Current Sale</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="max-h-[300px] overflow-y-auto mb-4">
+        <CardContent className="flex-1 overflow-auto">
+          {cart.length === 0 ? (
+            <p className="text-center text-muted-foreground">Cart is empty.</p>
+          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Item</TableHead>
                   <TableHead>Qty</TableHead>
                   <TableHead>Price</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Subtotal</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cart.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
-                      No items in cart
+                {cart.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.name}</TableCell>
+                    <TableCell className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => updateCartQuantity(item.id, -1)}>
+                        <MinusCircle className="h-4 w-4" />
+                      </Button>
+                      <span>{item.quantity}</span>
+                      <Button variant="ghost" size="icon" onClick={() => updateCartQuantity(item.id, 1)}>
+                        <PlusCircle className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                    <TableCell>{formatCurrency(item.price)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(item.subtotal)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => removeFromCart(item.id)}>
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      </Button>
                     </TableCell>
                   </TableRow>
-                ) : (
-                  cart.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell className="flex items-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => updateCartQuantity(item.id, -1)}
-                        >
-                          <MinusCircle className="h-4 w-4" />
-                        </Button>
-                        <span>{item.quantity}</span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => updateCartQuantity(item.id, 1)}
-                        >
-                          <PlusCircle className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                      <TableCell>{formatCurrency(item.price)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(item.itemTotal)}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFromCart(item.id)}>
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                ))}
               </TableBody>
             </Table>
-          </div>
-          <div className="flex justify-between items-center font-bold text-lg mb-4">
+          )}
+        </CardContent>
+        <CardFooter className="flex flex-col gap-4">
+          <div className="flex justify-between w-full text-lg font-bold">
             <span>Total:</span>
             <span>{formatCurrency(total)}</span>
           </div>
-          <div className="space-y-2">
-            <Button onClick={processSale} className="w-full" disabled={isProcessingSale || cart.length === 0}>
+          <div className="flex gap-2 w-full">
+            <Button className="flex-1" onClick={processSale} disabled={isProcessingSale || cart.length === 0}>
               {isProcessingSale ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
-                </>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <>
-                  <Receipt className="mr-2 h-4 w-4" /> Process Sale
-                </>
+                <DollarSign className="mr-2 h-4 w-4" />
               )}
+              Process Sale
             </Button>
-
-            <Dialog open={isRecallingSale} onOpenChange={setIsRecallingSale}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="w-full bg-transparent">
-                  Recall Held Sale
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Recall Held Transactions</DialogTitle>
-                  <DialogDescription>Select a held transaction to recall.</DialogDescription>
-                </DialogHeader>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {heldTransactions.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">
-                          No held transactions
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      heldTransactions.map((held) => (
-                        <TableRow key={held.id}>
-                          <TableCell>{held.hold_name}</TableCell>
-                          <TableCell>{formatCurrency(held.held_data.total)}</TableCell>
-                          <TableCell>{new Date(held.created_at).toLocaleString()}</TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                recallSale(held)
-                                setIsRecallingSale(false)
-                              }}
-                            >
-                              Recall
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="ml-2 h-8 w-8"
-                              onClick={() => deleteHeldTransaction(held.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </DialogContent>
-            </Dialog>
-
+            <Button
+              variant="outline"
+              className="flex-1 bg-transparent"
+              onClick={clearCart}
+              disabled={cart.length === 0}
+            >
+              Clear Cart
+            </Button>
+          </div>
+          <div className="flex gap-2 w-full">
             <Dialog>
               <DialogTrigger asChild>
-                <Button variant="outline" className="w-full bg-transparent" disabled={cart.length === 0}>
-                  Hold Sale
+                <Button variant="outline" className="flex-1 bg-transparent" disabled={cart.length === 0}>
+                  <Save className="mr-2 h-4 w-4" /> Hold Sale
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Hold Current Sale</DialogTitle>
-                  <DialogDescription>Enter a name to save this transaction for later.</DialogDescription>
+                  <DialogDescription>Enter a name for this held transaction.</DialogDescription>
                 </DialogHeader>
                 <Input
-                  placeholder="Enter a name for this held sale"
+                  placeholder="e.g., Customer A's order"
                   value={holdName}
                   onChange={(e) => setHoldName(e.target.value)}
                   className="mb-4"
                 />
-                <Button onClick={holdSale} className="w-full" disabled={isHoldingSale || !holdName.trim()}>
-                  {isHoldingSale ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Holding...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" /> Save Held Sale
-                    </>
-                  )}
+                <Button onClick={holdSale} disabled={isHoldingSale}>
+                  {isHoldingSale ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Confirm Hold"}
                 </Button>
               </DialogContent>
             </Dialog>
 
-            <Button variant="destructive" onClick={() => setCart([])} className="w-full" disabled={cart.length === 0}>
-              <XCircle className="mr-2 h-4 w-4" /> Clear Sale
-            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="flex-1 bg-transparent" disabled={heldTransactions.length === 0}>
+                  <RotateCcw className="mr-2 h-4 w-4" /> Recall Sale
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Recall Held Sale</DialogTitle>
+                  <DialogDescription>Select a held transaction to recall.</DialogDescription>
+                </DialogHeader>
+                {heldTransactions.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4">No held transactions available.</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead>Held At</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {heldTransactions.map((held) => (
+                        <TableRow key={held.id}>
+                          <TableCell>{held.transaction_name}</TableCell>
+                          <TableCell>{formatCurrency(held.total_amount)}</TableCell>
+                          <TableCell>{new Date(held.held_at).toLocaleString()}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => recallSale(held)}
+                              disabled={isRecallingSale}
+                            >
+                              Recall
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
-        </CardContent>
+        </CardFooter>
       </Card>
     </div>
   )

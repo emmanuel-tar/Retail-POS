@@ -1,583 +1,306 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Card, CardContent } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { Plus, Edit, Trash2, Phone, Mail, MapPin, FileText, Star, Clock } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { Plus, Edit, Trash2, Search, Building } from "lucide-react"
 
 interface Supplier {
   id: string
   name: string
-  contactPerson: string
-  phone: string
+  contact_person: string
   email: string
+  phone: string
   address: string
   status: "active" | "inactive"
-  rating: number
-  products: number
-  lastOrder: string
-}
-
-interface SupplierProduct {
-  id: string
-  name: string
-  category: string
-  unitPrice: number
-  leadTime: string
-  minOrder: number
-}
-
-interface SupplierOrder {
-  id: string
-  date: string
-  amount: number
-  status: "pending" | "received" | "cancelled"
-  items: number
+  created_at: string
 }
 
 export default function SupplierModule() {
+  const { toast } = useToast()
+
   const [suppliers, setSuppliers] = useState<Supplier[]>([
     {
-      id: "1",
-      name: "ABC Suppliers Ltd",
-      contactPerson: "John Smith",
-      phone: "+234 123 456 7890",
-      email: "contact@abcsuppliers.com",
-      address: "123 Main Street, Lagos, Nigeria",
+      id: "sup-001",
+      name: "Tech Corp",
+      contact_person: "John Smith",
+      email: "john@techcorp.com",
+      phone: "+1-555-0123",
+      address: "123 Tech Street, Silicon Valley, CA 94000",
       status: "active",
-      rating: 4,
-      products: 25,
-      lastOrder: "2024-01-22",
+      created_at: "2024-01-01T00:00:00Z",
     },
     {
-      id: "2",
-      name: "XYZ Trading Co",
-      contactPerson: "Jane Doe",
-      phone: "+234 987 654 3210",
-      email: "info@xyztrading.com",
-      address: "456 Market Road, Abuja, Nigeria",
+      id: "sup-002",
+      name: "Peripheral Inc",
+      contact_person: "Jane Doe",
+      email: "jane@peripheral.com",
+      phone: "+1-555-0456",
+      address: "456 Hardware Ave, Austin, TX 78701",
       status: "active",
-      rating: 3,
-      products: 18,
-      lastOrder: "2024-01-18",
+      created_at: "2024-01-02T00:00:00Z",
     },
     {
-      id: "3",
-      name: "Global Imports Inc",
-      contactPerson: "Michael Johnson",
-      phone: "+234 555 123 4567",
-      email: "sales@globalimports.com",
-      address: "789 Harbor Avenue, Port Harcourt, Nigeria",
+      id: "sup-003",
+      name: "Office Supplies Co",
+      contact_person: "Bob Johnson",
+      email: "bob@officesupplies.com",
+      phone: "+1-555-0789",
+      address: "789 Business Blvd, New York, NY 10001",
       status: "inactive",
-      rating: 2,
-      products: 12,
-      lastOrder: "2024-01-10",
-    },
-    {
-      id: "4",
-      name: "Local Distributors",
-      contactPerson: "Sarah Williams",
-      phone: "+234 111 222 3333",
-      email: "info@localdistributors.com",
-      address: "321 Village Road, Kano, Nigeria",
-      status: "active",
-      rating: 5,
-      products: 30,
-      lastOrder: "2024-01-25",
+      created_at: "2024-01-03T00:00:00Z",
     },
   ])
 
-  const [supplierProducts, setSupplierProducts] = useState<SupplierProduct[]>([
-    {
-      id: "1",
-      name: "Coca Cola 35cl",
-      category: "Beverages",
-      unitPrice: 120,
-      leadTime: "3-5 days",
-      minOrder: 50,
-    },
-    {
-      id: "2",
-      name: "Indomie Noodles",
-      category: "Food",
-      unitPrice: 100,
-      leadTime: "2-3 days",
-      minOrder: 100,
-    },
-    {
-      id: "7",
-      name: "Sprite 35cl",
-      category: "Beverages",
-      unitPrice: 120,
-      leadTime: "3-5 days",
-      minOrder: 50,
-    },
-  ])
-
-  const [supplierOrders, setSupplierOrders] = useState<SupplierOrder[]>([
-    {
-      id: "PO-2024-001",
-      date: "2024-01-15",
-      amount: 16000,
-      status: "received",
-      items: 2,
-    },
-    {
-      id: "PO-2024-004",
-      date: "2024-01-22",
-      amount: 18000,
-      status: "received",
-      items: 2,
-    },
-  ])
-
-  const [activeTab, setActiveTab] = useState("suppliers")
   const [searchTerm, setSearchTerm] = useState("")
-  const [showSupplierDialog, setShowSupplierDialog] = useState(false)
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
-  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+  const [formData, setFormData] = useState<Partial<Supplier>>({})
 
   const filteredSuppliers = suppliers.filter(
     (supplier) =>
       supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      supplier.contact_person.toLowerCase().includes(searchTerm.toLowerCase()) ||
       supplier.email.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
   const handleAddSupplier = () => {
+    setFormData({ status: "active" })
     setEditingSupplier(null)
-    setShowSupplierDialog(true)
+    setIsAddDialogOpen(true)
   }
 
   const handleEditSupplier = (supplier: Supplier) => {
+    setFormData(supplier)
     setEditingSupplier(supplier)
-    setShowSupplierDialog(true)
-  }
-
-  const handleDeleteSupplier = (supplierId: string) => {
-    setSuppliers(suppliers.filter((s) => s.id !== supplierId))
-  }
-
-  const handleViewSupplier = (supplier: Supplier) => {
-    setSelectedSupplier(supplier)
-    setActiveTab("details")
+    setIsAddDialogOpen(true)
   }
 
   const handleSaveSupplier = () => {
-    // In a real app, this would save to the backend
-    setShowSupplierDialog(false)
-  }
-
-  const getStatusColor = (status: string) => {
-    return status === "active" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-  }
-
-  const getOrderStatusColor = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "received":
-        return "bg-green-100 text-green-800"
-      case "cancelled":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+    if (!formData.name || !formData.contact_person || !formData.email) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      })
+      return
     }
+
+    if (editingSupplier) {
+      // Update existing supplier
+      setSuppliers((prev) => prev.map((s) => (s.id === editingSupplier.id ? { ...editingSupplier, ...formData } : s)))
+      toast({
+        title: "Supplier Updated",
+        description: `${formData.name} has been updated successfully.`,
+      })
+    } else {
+      // Add new supplier
+      const newSupplier: Supplier = {
+        id: `sup-${Date.now()}`,
+        name: formData.name || "",
+        contact_person: formData.contact_person || "",
+        email: formData.email || "",
+        phone: formData.phone || "",
+        address: formData.address || "",
+        status: formData.status || "active",
+        created_at: new Date().toISOString(),
+      }
+      setSuppliers((prev) => [...prev, newSupplier])
+      toast({
+        title: "Supplier Added",
+        description: `${newSupplier.name} has been added successfully.`,
+      })
+    }
+
+    setIsAddDialogOpen(false)
+    setFormData({})
+    setEditingSupplier(null)
   }
 
-  const renderRatingStars = (rating: number) => {
-    return (
-      <div className="flex">
-        {[...Array(5)].map((_, i) => (
-          <Star key={i} className={`h-4 w-4 ${i < rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}`} />
-        ))}
-      </div>
-    )
+  const handleDeleteSupplier = (supplier: Supplier) => {
+    setSuppliers((prev) => prev.filter((s) => s.id !== supplier.id))
+    toast({
+      title: "Supplier Deleted",
+      description: `${supplier.name} has been removed.`,
+    })
+  }
+
+  const toggleSupplierStatus = (supplier: Supplier) => {
+    const newStatus = supplier.status === "active" ? "inactive" : "active"
+    setSuppliers((prev) => prev.map((s) => (s.id === supplier.id ? { ...s, status: newStatus } : s)))
+    toast({
+      title: "Status Updated",
+      description: `${supplier.name} is now ${newStatus}.`,
+    })
   }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold">Supplier Management</h2>
-          <p className="text-muted-foreground">Manage your suppliers and their products</p>
-        </div>
-        {activeTab === "suppliers" ? (
-          <Button onClick={handleAddSupplier}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Supplier
-          </Button>
-        ) : (
-          <Button variant="outline" onClick={() => setActiveTab("suppliers")}>
-            Back to Suppliers
-          </Button>
-        )}
+        <h2 className="text-2xl font-bold">Supplier Management</h2>
+        <Button onClick={handleAddSupplier}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Supplier
+        </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="suppliers">All Suppliers</TabsTrigger>
-          <TabsTrigger value="details" disabled={!selectedSupplier}>
-            Supplier Details
-          </TabsTrigger>
-          <TabsTrigger value="products" disabled={!selectedSupplier}>
-            Products & Orders
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="suppliers" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Suppliers</CardTitle>
-              <CardDescription>Manage your supplier database</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Input
-                placeholder="Search suppliers by name, contact person, or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Contact Person</TableHead>
-                    <TableHead>Contact Info</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Rating</TableHead>
-                    <TableHead>Products</TableHead>
-                    <TableHead>Last Order</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSuppliers.map((supplier) => (
-                    <TableRow key={supplier.id}>
-                      <TableCell className="font-medium">{supplier.name}</TableCell>
-                      <TableCell>{supplier.contactPerson}</TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center text-sm">
-                            <Phone className="h-3 w-3 mr-1" />
-                            {supplier.phone}
-                          </div>
-                          <div className="flex items-center text-sm">
-                            <Mail className="h-3 w-3 mr-1" />
-                            {supplier.email}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(supplier.status)}>{supplier.status}</Badge>
-                      </TableCell>
-                      <TableCell>{renderRatingStars(supplier.rating)}</TableCell>
-                      <TableCell>{supplier.products}</TableCell>
-                      <TableCell>{supplier.lastOrder}</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button variant="outline" size="sm" onClick={() => handleViewSupplier(supplier)}>
-                            <FileText className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleEditSupplier(supplier)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="outline" size="sm">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Supplier</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete {supplier.name}? This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteSupplier(supplier.id)}
-                                  className="bg-red-600 hover:bg-red-700"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="details" className="space-y-4">
-          {selectedSupplier && (
-            <>
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle>{selectedSupplier.name}</CardTitle>
-                      <CardDescription>Supplier ID: {selectedSupplier.id}</CardDescription>
-                    </div>
-                    <Badge className={getStatusColor(selectedSupplier.status)}>{selectedSupplier.status}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-sm font-medium text-muted-foreground">Contact Information</h3>
-                        <div className="mt-2 space-y-2">
-                          <div className="flex items-center">
-                            <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
-                            <span>{selectedSupplier.phone}</span>
-                          </div>
-                          <div className="flex items-center">
-                            <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                            <span>{selectedSupplier.email}</span>
-                          </div>
-                          <div className="flex items-start">
-                            <MapPin className="h-4 w-4 mr-2 text-muted-foreground mt-1" />
-                            <span>{selectedSupplier.address}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h3 className="text-sm font-medium text-muted-foreground">Primary Contact</h3>
-                        <div className="mt-2">
-                          <p className="font-medium">{selectedSupplier.contactPerson}</p>
-                          <p className="text-sm text-muted-foreground">Procurement Manager</p>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h3 className="text-sm font-medium text-muted-foreground">Supplier Rating</h3>
-                        <div className="mt-2 flex items-center">
-                          {renderRatingStars(selectedSupplier.rating)}
-                          <span className="ml-2 text-sm text-muted-foreground">
-                            {selectedSupplier.rating}/5 based on performance
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-sm font-medium text-muted-foreground">Supplier Statistics</h3>
-                        <div className="mt-2 grid grid-cols-2 gap-4">
-                          <div className="bg-gray-50 p-3 rounded-lg">
-                            <p className="text-sm text-muted-foreground">Products</p>
-                            <p className="text-2xl font-bold">{selectedSupplier.products}</p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-lg">
-                            <p className="text-sm text-muted-foreground">Last Order</p>
-                            <p className="text-lg font-medium">{selectedSupplier.lastOrder}</p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-lg">
-                            <p className="text-sm text-muted-foreground">Avg. Lead Time</p>
-                            <p className="text-lg font-medium">3-5 days</p>
-                          </div>
-                          <div className="bg-gray-50 p-3 rounded-lg">
-                            <p className="text-sm text-muted-foreground">Payment Terms</p>
-                            <p className="text-lg font-medium">Net 30</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h3 className="text-sm font-medium text-muted-foreground">Notes</h3>
-                        <Textarea
-                          className="mt-2"
-                          placeholder="Add notes about this supplier..."
-                          defaultValue="Reliable supplier with consistent quality. Offers bulk discounts for orders over 100 units."
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end space-x-2">
-                    <Button variant="outline" onClick={() => handleEditSupplier(selectedSupplier)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit Supplier
-                    </Button>
-                    <Button onClick={() => setActiveTab("products")}>View Products & Orders</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </TabsContent>
-
-        <TabsContent value="products" className="space-y-4">
-          {selectedSupplier && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Products from {selectedSupplier.name}</CardTitle>
-                    <CardDescription>Products supplied by this vendor</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Product</TableHead>
-                          <TableHead>Category</TableHead>
-                          <TableHead className="text-right">Unit Price</TableHead>
-                          <TableHead>Lead Time</TableHead>
-                          <TableHead className="text-right">Min Order</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {supplierProducts.map((product) => (
-                          <TableRow key={product.id}>
-                            <TableCell className="font-medium">{product.name}</TableCell>
-                            <TableCell>{product.category}</TableCell>
-                            <TableCell className="text-right">₦{product.unitPrice.toFixed(2)}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center">
-                                <Clock className="h-3 w-3 mr-1 text-muted-foreground" />
-                                {product.leadTime}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">{product.minOrder} units</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <div className="mt-4 flex justify-end">
-                      <Button variant="outline" size="sm">
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Product
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Purchase History</CardTitle>
-                    <CardDescription>Recent orders with this supplier</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Order ID</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
-                          <TableHead className="text-right">Items</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {supplierOrders.map((order) => (
-                          <TableRow key={order.id}>
-                            <TableCell className="font-medium">{order.id}</TableCell>
-                            <TableCell>{order.date}</TableCell>
-                            <TableCell className="text-right">₦{order.amount.toFixed(2)}</TableCell>
-                            <TableCell className="text-right">{order.items}</TableCell>
-                            <TableCell>
-                              <Badge className={getOrderStatusColor(order.status)}>{order.status}</Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <div className="mt-4 flex justify-end">
-                      <Button variant="outline" size="sm">
-                        <FileText className="h-4 w-4 mr-1" />
-                        View All Orders
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Building className="h-4 w-4 text-blue-500" />
+              <div>
+                <p className="text-sm font-medium">Total Suppliers</p>
+                <p className="text-2xl font-bold">{suppliers.length}</p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <div className="h-4 w-4 bg-green-500 rounded-full" />
+              <div>
+                <p className="text-sm font-medium">Active Suppliers</p>
+                <p className="text-2xl font-bold">{suppliers.filter((s) => s.status === "active").length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <div className="h-4 w-4 bg-red-500 rounded-full" />
+              <div>
+                <p className="text-sm font-medium">Inactive Suppliers</p>
+                <p className="text-2xl font-bold">{suppliers.filter((s) => s.status === "inactive").length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Create Purchase Order</CardTitle>
-                  <CardDescription>Create a new purchase order for this supplier</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex justify-center">
-                    <Button>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create New Purchase Order
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </TabsContent>
-      </Tabs>
+      {/* Search */}
+      <div className="flex items-center space-x-2">
+        <Search className="h-4 w-4 text-gray-400" />
+        <Input
+          placeholder="Search suppliers by name, contact person, or email..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-sm"
+        />
+      </div>
+
+      {/* Suppliers Table */}
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Contact Person</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredSuppliers.map((supplier) => (
+                <TableRow key={supplier.id}>
+                  <TableCell className="font-medium">{supplier.name}</TableCell>
+                  <TableCell>{supplier.contact_person}</TableCell>
+                  <TableCell>{supplier.email}</TableCell>
+                  <TableCell>{supplier.phone}</TableCell>
+                  <TableCell>
+                    <Badge variant={supplier.status === "active" ? "default" : "secondary"}>{supplier.status}</Badge>
+                  </TableCell>
+                  <TableCell>{new Date(supplier.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end space-x-2">
+                      <Button variant="ghost" size="sm" onClick={() => toggleSupplierStatus(supplier)}>
+                        {supplier.status === "active" ? "Deactivate" : "Activate"}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEditSupplier(supplier)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteSupplier(supplier)}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       {/* Add/Edit Supplier Dialog */}
-      <Dialog open={showSupplierDialog} onOpenChange={setShowSupplierDialog}>
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingSupplier ? "Edit Supplier" : "Add New Supplier"}</DialogTitle>
-            <DialogDescription>
-              {editingSupplier ? "Update supplier information" : "Add a new supplier to your database"}
-            </DialogDescription>
           </DialogHeader>
-
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Supplier Name</Label>
-              <Input id="name" placeholder="Enter supplier name" defaultValue={editingSupplier?.name} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="contactPerson">Contact Person</Label>
+              <Label htmlFor="name">Company Name *</Label>
               <Input
-                id="contactPerson"
-                placeholder="Enter contact person name"
-                defaultValue={editingSupplier?.contactPerson}
+                id="name"
+                value={formData.name || ""}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Company name"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" placeholder="Enter phone number" defaultValue={editingSupplier?.phone} />
+              <Label htmlFor="contact_person">Contact Person *</Label>
+              <Input
+                id="contact_person"
+                value={formData.contact_person || ""}
+                onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
+                placeholder="Contact person name"
+              />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="Enter email address" defaultValue={editingSupplier?.email} />
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email || ""}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="Email address"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                value={formData.phone || ""}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="Phone number"
+              />
             </div>
             <div className="space-y-2 col-span-2">
               <Label htmlFor="address">Address</Label>
-              <Textarea id="address" placeholder="Enter full address" defaultValue={editingSupplier?.address} />
+              <Input
+                id="address"
+                value={formData.address || ""}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                placeholder="Full address"
+              />
             </div>
           </div>
-
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setShowSupplierDialog(false)}>
+          <div className="flex justify-end space-x-2 mt-6">
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleSaveSupplier}>{editingSupplier ? "Update Supplier" : "Add Supplier"}</Button>
