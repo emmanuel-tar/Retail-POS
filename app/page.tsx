@@ -1,186 +1,180 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { useAuth } from "@/hooks/use-auth"
+import { LoginForm } from "@/components/login-form"
 import { Button } from "@/components/ui/button"
-import { Home, ShoppingCart, Package, Users, BarChart, Settings, Truck, Building, FileText } from "lucide-react"
-import SalesModule from "@/components/sales-module"
-import InventoryModule from "@/components/inventory-module"
-import AdvancedReports from "@/components/advanced-reports"
-import EnhancedUserManagement from "@/components/enhanced-user-management"
-import PurchaseModule from "@/components/purchase-module"
-import SupplierModule from "@/components/supplier-module"
-import SettingsModule from "@/components/settings-module"
-import StoreManagement from "@/components/store-management"
-import ChangeLogViewer from "@/components/change-log-viewer"
-import LoginForm from "@/components/login-form"
-import { AuthProvider, useAuth } from "@/hooks/use-auth"
-import { StoreProvider } from "@/hooks/use-store"
-import { ChangeLogProvider } from "@/hooks/use-change-log"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { SalesModule } from "@/components/sales-module"
+import { InventoryModule } from "@/components/inventory-module"
+import { ReportsModule } from "@/components/reports-module"
+import { UserManagement } from "@/components/user-management"
+import { PurchaseModule } from "@/components/purchase-module"
+import { SupplierModule } from "@/components/supplier-module"
+import { SettingsModule } from "@/components/settings-module"
+import { StoreManagement } from "@/components/store-management"
+import { ChangeLogViewer } from "@/components/change-log-viewer"
+import { AdvancedReports } from "@/components/advanced-reports"
+import {
+  ShoppingCart,
+  Package,
+  BarChart3,
+  Users,
+  ShoppingBag,
+  Truck,
+  Settings,
+  LogOut,
+  Store,
+  Activity,
+  TrendingUp,
+} from "lucide-react"
 
-export default function HomeDashboard() {
-  return (
-    <AuthProvider>
-      <ChangeLogProvider>
-        <StoreProvider>
-          <AppContent />
-        </StoreProvider>
-      </ChangeLogProvider>
-    </AuthProvider>
-  )
-}
-
-function AppContent() {
-  const { user, logout } = useAuth()
-  const [activeModule, setActiveModule] = useState("sales")
+export default function Home() {
+  const { user, logout, checkPermissions } = useAuth()
+  const [activeTab, setActiveTab] = useState("sales")
 
   if (!user) {
     return <LoginForm />
   }
 
-  const renderModule = () => {
-    switch (activeModule) {
-      case "sales":
-        return <SalesModule />
-      case "inventory":
-        return <InventoryModule />
-      case "reports":
-        return <AdvancedReports />
-      case "users":
-        return <EnhancedUserManagement />
-      case "purchases":
-        return <PurchaseModule />
-      case "suppliers":
-        return <SupplierModule />
-      case "stores":
-        return <StoreManagement />
-      case "changelog":
-        return <ChangeLogViewer />
-      case "settings":
-        return <SettingsModule />
-      default:
-        return <SalesModule />
-    }
+  const handleLogout = () => {
+    logout()
   }
 
-  return (
-    <div className="flex min-h-screen w-full">
-      <aside className="flex flex-col items-center gap-4 border-r bg-background px-2 py-6">
-        <div className="text-center mb-4">
-          <div className="text-xs font-medium text-gray-600">{user.storeName}</div>
-          <div className="text-xs text-gray-400">Store: {user.storeCode}</div>
-        </div>
+  const tabs = [
+    {
+      id: "sales",
+      label: "Sales",
+      icon: ShoppingCart,
+      component: SalesModule,
+      permission: "view_sales",
+    },
+    {
+      id: "inventory",
+      label: "Inventory",
+      icon: Package,
+      component: InventoryModule,
+      permission: "view_inventory",
+    },
+    {
+      id: "reports",
+      label: "Reports",
+      icon: BarChart3,
+      component: ReportsModule,
+      permission: "view_reports",
+    },
+    {
+      id: "advanced-reports",
+      label: "Analytics",
+      icon: TrendingUp,
+      component: AdvancedReports,
+      permission: "view_reports",
+    },
+    {
+      id: "purchases",
+      label: "Purchases",
+      icon: ShoppingBag,
+      component: PurchaseModule,
+      permission: "manage_purchases",
+    },
+    {
+      id: "suppliers",
+      label: "Suppliers",
+      icon: Truck,
+      component: SupplierModule,
+      permission: "manage_suppliers",
+    },
+    {
+      id: "users",
+      label: "Users",
+      icon: Users,
+      component: UserManagement,
+      permission: "manage_users",
+    },
+    {
+      id: "stores",
+      label: "Stores",
+      icon: Store,
+      component: StoreManagement,
+      permission: "manage_stores",
+    },
+    {
+      id: "activity",
+      label: "Activity Log",
+      icon: Activity,
+      component: ChangeLogViewer,
+      permission: "view_reports",
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      icon: Settings,
+      component: SettingsModule,
+      permission: "manage_settings",
+    },
+  ]
 
-        <nav className="grid gap-1">
-          <Button
-            variant={activeModule === "sales" ? "secondary" : "ghost"}
-            size="icon"
-            className="rounded-lg"
-            aria-label="Sales"
-            onClick={() => setActiveModule("sales")}
-          >
-            <ShoppingCart className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeModule === "inventory" ? "secondary" : "ghost"}
-            size="icon"
-            className="rounded-lg"
-            aria-label="Inventory"
-            onClick={() => setActiveModule("inventory")}
-          >
-            <Package className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeModule === "purchases" ? "secondary" : "ghost"}
-            size="icon"
-            className="rounded-lg"
-            aria-label="Purchases"
-            onClick={() => setActiveModule("purchases")}
-          >
-            <Truck className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeModule === "suppliers" ? "secondary" : "ghost"}
-            size="icon"
-            className="rounded-lg"
-            aria-label="Suppliers"
-            onClick={() => setActiveModule("suppliers")}
-          >
-            <Home className="h-5 w-5" />
-          </Button>
-          {user.isMainStore && (
-            <Button
-              variant={activeModule === "stores" ? "secondary" : "ghost"}
-              size="icon"
-              className="rounded-lg"
-              aria-label="Stores"
-              onClick={() => setActiveModule("stores")}
-            >
-              <Building className="h-5 w-5" />
-            </Button>
-          )}
-          <Button
-            variant={activeModule === "reports" ? "secondary" : "ghost"}
-            size="icon"
-            className="rounded-lg"
-            aria-label="Reports"
-            onClick={() => setActiveModule("reports")}
-          >
-            <BarChart className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeModule === "changelog" ? "secondary" : "ghost"}
-            size="icon"
-            className="rounded-lg"
-            aria-label="Change Log"
-            onClick={() => setActiveModule("changelog")}
-          >
-            <FileText className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeModule === "users" ? "secondary" : "ghost"}
-            size="icon"
-            className="rounded-lg"
-            aria-label="Users"
-            onClick={() => setActiveModule("users")}
-          >
-            <Users className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeModule === "settings" ? "secondary" : "ghost"}
-            size="icon"
-            className="rounded-lg"
-            aria-label="Settings"
-            onClick={() => setActiveModule("settings")}
-          >
-            <Settings className="h-5 w-5" />
-          </Button>
-        </nav>
-        <div className="mt-auto">
-          <Button variant="ghost" size="icon" className="rounded-lg" aria-label="Logout" onClick={logout}>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="lucide lucide-log-out"
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="17 16 22 12 17 8" />
-              <line x1="22" x2="10" y1="12" y2="12" />
-            </svg>
-          </Button>
+  const availableTabs = tabs.filter((tab) => checkPermissions(user.role, tab.permission))
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-semibold text-gray-900">POS System</h1>
+              <Badge variant="outline" className="text-xs">
+                {user.storeName}
+              </Badge>
+              {user.isMainStore && (
+                <Badge variant="default" className="text-xs">
+                  Main Store
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">{user.username}</span>
+                <span className="mx-2">•</span>
+                <span className="capitalize">{user.role}</span>
+                <span className="mx-2">•</span>
+                <span>Company: {user.companyId}</span>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
+            </div>
+          </div>
         </div>
-      </aside>
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-        <Card>
-          <CardContent className="p-4">{renderModule()}</CardContent>
-        </Card>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10">
+            {availableTabs.map((tab) => {
+              const Icon = tab.icon
+              return (
+                <TabsTrigger key={tab.id} value={tab.id} className="flex items-center space-x-2">
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                </TabsTrigger>
+              )
+            })}
+          </TabsList>
+
+          {availableTabs.map((tab) => {
+            const Component = tab.component
+            return (
+              <TabsContent key={tab.id} value={tab.id}>
+                <Component />
+              </TabsContent>
+            )
+          })}
+        </Tabs>
       </main>
     </div>
   )

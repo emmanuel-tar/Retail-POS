@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 
-interface ChangeLogEntry {
+export interface ChangeLogEntry {
   id: string
   timestamp: string
   action: string
@@ -14,18 +14,20 @@ interface ChangeLogEntry {
   storeCode: string
   storeName?: string
   companyId: string
-  metadata?: Record<string, any>
+  companyName?: string
 }
 
 interface ChangeLogContextType {
   logs: ChangeLogEntry[]
   logChange: (entry: Omit<ChangeLogEntry, "id" | "timestamp">) => void
-  getLogsByStore: (storeCode: string) => ChangeLogEntry[]
-  getLogsByUser: (userId: string) => ChangeLogEntry[]
-  getLogsByEntity: (entity: string) => ChangeLogEntry[]
-  getLogsByDateRange: (startDate: string, endDate: string) => ChangeLogEntry[]
-  clearLogs: () => void
-  exportLogs: (format: "json" | "csv") => string
+  getLogs: (filters?: {
+    storeCode?: string
+    userId?: string
+    entity?: string
+    startDate?: string
+    endDate?: string
+  }) => ChangeLogEntry[]
+  exportLogs: (format: "json" | "csv", filters?: any) => void
 }
 
 const ChangeLogContext = createContext<ChangeLogContextType | undefined>(undefined)
@@ -34,12 +36,11 @@ export function ChangeLogProvider({ children }: { children: ReactNode }) {
   const [logs, setLogs] = useState<ChangeLogEntry[]>([])
 
   useEffect(() => {
-    // Load logs from localStorage
+    // Load existing logs from localStorage
     const storedLogs = localStorage.getItem("pos_change_logs")
     if (storedLogs) {
       try {
-        const parsedLogs = JSON.parse(storedLogs)
-        setLogs(parsedLogs)
+        setLogs(JSON.parse(storedLogs))
       } catch (error) {
         console.error("Error loading change logs:", error)
       }
@@ -49,65 +50,58 @@ export function ChangeLogProvider({ children }: { children: ReactNode }) {
   const logChange = (entry: Omit<ChangeLogEntry, "id" | "timestamp">) => {
     const newEntry: ChangeLogEntry = {
       ...entry,
-      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date().toISOString(),
     }
 
-    const updatedLogs = [newEntry, ...logs].slice(0, 10000) // Keep only last 10,000 entries
-    setLogs(updatedLogs)
-    localStorage.setItem("pos_change_logs", JSON.stringify(updatedLogs))
-  }
-
-  const getLogsByStore = (storeCode: string) => {
-    return logs.filter((log) => log.storeCode === storeCode)
-  }
-
-  const getLogsByUser = (userId: string) => {
-    return logs.filter((log) => log.userId === userId)
-  }
-
-  const getLogsByEntity = (entity: string) => {
-    return logs.filter((log) => log.entity === entity)
-  }
-
-  const getLogsByDateRange = (startDate: string, endDate: string) => {
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    return logs.filter((log) => {
-      const logDate = new Date(log.timestamp)
-      return logDate >= start && logDate <= end
+    setLogs((prevLogs) => {
+      const updatedLogs = [newEntry, ...prevLogs]
+      // Keep only last 1000 entries to prevent storage overflow
+      const trimmedLogs = updatedLogs.slice(0, 1000)
+      localStorage.setItem("pos_change_logs", JSON.stringify(trimmedLogs))
+      return trimmedLogs
     })
   }
 
-  const clearLogs = () => {
-    setLogs([])
-    localStorage.removeItem("pos_change_logs")
+  const getLogs = (filters?: {
+    storeCode?: string
+    userId?: string
+    entity?: string
+    startDate?: string
+    endDate?: string
+  }) => {
+    if (!filters) return logs
+
+    return logs.filter((log) => {
+      if (filters.storeCode && log.storeCode !== filters.storeCode) return false
+      if (filters.userId && log.userId !== filters.userId) return false
+      if (filters.entity && log.entity !== filters.entity) return false
+      if (filters.startDate && log.timestamp < filters.startDate) return false
+      if (filters.endDate && log.timestamp > filters.endDate) return false
+      return true
+    })
   }
 
-  const exportLogs = (format: "json" | "csv"): string => {
+  const exportLogs = (format: "json" | "csv", filters?: any) => {
+    const filteredLogs = getLogs(filters)
+
     if (format === "json") {
-      return JSON.stringify(logs, null, 2)
-    } else {
-      const headers = [
-        "ID",
-        "Timestamp",
-        "Action",
-        "Entity",
-        "Entity ID",
-        "Details",
-        "User ID",
-        "Store Code",
-        "Company ID",
-      ]
+      const dataStr = JSON.stringify(filteredLogs, null, 2)
+      const dataBlob = new Blob([dataStr], { type: "application/json" })
+      const url = URL.createObjectURL(dataBlob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `change-logs-${new Date().toISOString().split("T")[0]}.json`
+      link.click()
+    } else if (format === "csv") {
+      const headers = ["Timestamp", "Action", "Entity", "Details", "User ID", "Store Code", "Company ID"]
       const csvContent = [
         headers.join(","),
-        ...logs.map((log) =>
+        ...filteredLogs.map((log) =>
           [
-            log.id,
             log.timestamp,
             log.action,
             log.entity,
-            log.entityId,
             `"${log.details.replace(/"/g, '""')}"`,
             log.userId,
             log.storeCode,
@@ -115,25 +109,18 @@ export function ChangeLogProvider({ children }: { children: ReactNode }) {
           ].join(","),
         ),
       ].join("\n")
-      return csvContent
+
+      const dataBlob = new Blob([csvContent], { type: "text/csv" })
+      const url = URL.createObjectURL(dataBlob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `change-logs-${new Date().toISOString().split("T")[0]}.csv`
+      link.click()
     }
   }
 
   return (
-    <ChangeLogContext.Provider
-      value={{
-        logs,
-        logChange,
-        getLogsByStore,
-        getLogsByUser,
-        getLogsByEntity,
-        getLogsByDateRange,
-        clearLogs,
-        exportLogs,
-      }}
-    >
-      {children}
-    </ChangeLogContext.Provider>
+    <ChangeLogContext.Provider value={{ logs, logChange, getLogs, exportLogs }}>{children}</ChangeLogContext.Provider>
   )
 }
 

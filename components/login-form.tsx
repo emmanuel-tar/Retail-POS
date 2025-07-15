@@ -1,74 +1,35 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Delete, Eye, EyeOff } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Eye, EyeOff, Keyboard, Grid3X3 } from "lucide-react"
 
-interface NumberPadProps {
-  onNumberClick: (num: string) => void
-  onBackspace: () => void
-  onClear: () => void
-}
-
-function NumberPad({ onNumberClick, onBackspace, onClear }: NumberPadProps) {
-  const numbers = [
-    ["1", "2", "3"],
-    ["4", "5", "6"],
-    ["7", "8", "9"],
-    ["Clear", "0", "Back"],
-  ]
-
-  return (
-    <div className="grid grid-cols-3 gap-2 p-4 bg-gray-50 rounded-lg">
-      {numbers.flat().map((item, index) => (
-        <Button
-          key={index}
-          variant={item === "Clear" || item === "Back" ? "destructive" : "outline"}
-          size="lg"
-          className={cn(
-            "h-12 text-lg font-semibold",
-            item === "Clear" || item === "Back"
-              ? "bg-red-100 hover:bg-red-200 text-red-700"
-              : "bg-white hover:bg-blue-50",
-          )}
-          onClick={() => {
-            if (item === "Clear") onClear()
-            else if (item === "Back") onBackspace()
-            else onNumberClick(item)
-          }}
-        >
-          {item === "Back" ? <Delete className="h-5 w-5" /> : item}
-        </Button>
-      ))}
-    </div>
-  )
-}
-
-export default function LoginForm() {
+export function LoginForm() {
   const [companyId, setCompanyId] = useState("")
   const [storeCode, setStoreCode] = useState("")
   const [password, setPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [activeField, setActiveField] = useState<"company" | "store" | "password" | null>(null)
   const [showPassword, setShowPassword] = useState(false)
-  const [useKeyboard, setUseKeyboard] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [useTouchPad, setUseTouchPad] = useState(true)
+  const [activeField, setActiveField] = useState<"company" | "store" | "password" | null>(null)
+
   const { login } = useAuth()
   const { toast } = useToast()
 
-  const handleNumberClick = (num: string) => {
+  const handleNumberPadClick = (digit: string) => {
     if (activeField === "company" && companyId.length < 5) {
-      setCompanyId((prev) => prev + num)
+      setCompanyId((prev) => prev + digit)
     } else if (activeField === "store" && storeCode.length < 3) {
-      setStoreCode((prev) => prev + num)
+      setStoreCode((prev) => prev + digit)
     } else if (activeField === "password" && password.length < 6) {
-      setPassword((prev) => prev + num)
+      setPassword((prev) => prev + digit)
     }
   }
 
@@ -123,12 +84,11 @@ export default function LoginForm() {
     }
 
     setIsLoading(true)
-
     try {
       await login(companyId, storeCode, password)
       toast({
         title: "Login Successful",
-        description: "Welcome to the POS System!",
+        description: "Welcome to the POS System",
       })
     } catch (error) {
       toast({
@@ -141,17 +101,59 @@ export default function LoginForm() {
     }
   }
 
-  const formatDisplayValue = (value: string, maxLength: number) => {
-    return showPassword || activeField !== "password"
-      ? value.padEnd(maxLength, "_")
-      : "•".repeat(value.length).padEnd(maxLength, "_")
-  }
+  const NumberPad = () => (
+    <div className="grid grid-cols-3 gap-3 mt-4">
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+        <Button
+          key={num}
+          type="button"
+          variant="outline"
+          size="lg"
+          className="h-16 text-xl font-semibold hover:bg-blue-50 active:bg-blue-100 bg-transparent"
+          onClick={() => handleNumberPadClick(num.toString())}
+          disabled={!activeField}
+        >
+          {num}
+        </Button>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        className="h-16 text-lg font-semibold hover:bg-red-50 active:bg-red-100 bg-transparent"
+        onClick={handleClear}
+        disabled={!activeField}
+      >
+        Clear
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        className="h-16 text-xl font-semibold hover:bg-blue-50 active:bg-blue-100 bg-transparent"
+        onClick={() => handleNumberPadClick("0")}
+        disabled={!activeField}
+      >
+        0
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        className="h-16 text-lg font-semibold hover:bg-yellow-50 active:bg-yellow-100 bg-transparent"
+        onClick={handleBackspace}
+        disabled={!activeField}
+      >
+        ⌫
+      </Button>
+    </div>
+  )
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md shadow-2xl">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-3xl font-bold text-gray-800">POS System</CardTitle>
+        <CardHeader className="text-center space-y-2">
+          <CardTitle className="text-2xl font-bold text-gray-800">POS System Login</CardTitle>
           <CardDescription className="text-gray-600">Enter your credentials to access the system</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -161,25 +163,26 @@ export default function LoginForm() {
               <Label htmlFor="companyId" className="text-sm font-medium">
                 Company ID (5 digits)
               </Label>
-              <div
-                className={cn(
-                  "relative cursor-pointer border-2 rounded-md p-3 transition-colors",
-                  activeField === "company" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300",
-                )}
-                onClick={() => setActiveField("company")}
-              >
-                <div className="text-2xl font-mono tracking-widest text-center">{formatDisplayValue(companyId, 5)}</div>
-                {useKeyboard && (
-                  <Input
-                    id="companyId"
-                    type="text"
-                    maxLength={5}
-                    value={companyId}
-                    onChange={(e) => setCompanyId(e.target.value.replace(/\D/g, ""))}
-                    className="absolute inset-0 opacity-0"
-                    autoFocus={activeField === "company"}
-                  />
-                )}
+              <div className="relative">
+                <Input
+                  id="companyId"
+                  type={useTouchPad ? "text" : "number"}
+                  value={companyId}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 5)
+                    setCompanyId(value)
+                  }}
+                  onFocus={() => setActiveField("company")}
+                  placeholder="12345"
+                  className={`text-center text-lg font-mono tracking-widest ${
+                    activeField === "company" ? "ring-2 ring-blue-500" : ""
+                  }`}
+                  maxLength={5}
+                  readOnly={useTouchPad}
+                />
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
+                  {companyId.length}/5
+                </div>
               </div>
             </div>
 
@@ -188,99 +191,118 @@ export default function LoginForm() {
               <Label htmlFor="storeCode" className="text-sm font-medium">
                 Store Code (3 digits)
               </Label>
-              <div
-                className={cn(
-                  "relative cursor-pointer border-2 rounded-md p-3 transition-colors",
-                  activeField === "store" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300",
-                )}
-                onClick={() => setActiveField("store")}
-              >
-                <div className="text-2xl font-mono tracking-widest text-center">{formatDisplayValue(storeCode, 3)}</div>
-                {useKeyboard && (
-                  <Input
-                    id="storeCode"
-                    type="text"
-                    maxLength={3}
-                    value={storeCode}
-                    onChange={(e) => setStoreCode(e.target.value.replace(/\D/g, ""))}
-                    className="absolute inset-0 opacity-0"
-                    autoFocus={activeField === "store"}
-                  />
-                )}
+              <div className="relative">
+                <Input
+                  id="storeCode"
+                  type={useTouchPad ? "text" : "number"}
+                  value={storeCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 3)
+                    setStoreCode(value)
+                  }}
+                  onFocus={() => setActiveField("store")}
+                  placeholder="001"
+                  className={`text-center text-lg font-mono tracking-widest ${
+                    activeField === "store" ? "ring-2 ring-blue-500" : ""
+                  }`}
+                  maxLength={3}
+                  readOnly={useTouchPad}
+                />
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
+                  {storeCode.length}/3
+                </div>
               </div>
             </div>
 
             {/* Password Field */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-sm font-medium">
-                  Password (6 digits)
-                </Label>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setShowPassword(!showPassword)}>
+              <Label htmlFor="password" className="text-sm font-medium">
+                Password (6 digits)
+              </Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 6)
+                    setPassword(value)
+                  }}
+                  onFocus={() => setActiveField("password")}
+                  placeholder="123456"
+                  className={`text-center text-lg font-mono tracking-widest pr-20 ${
+                    activeField === "password" ? "ring-2 ring-blue-500" : ""
+                  }`}
+                  maxLength={6}
+                  readOnly={useTouchPad}
+                />
+                <div className="absolute right-12 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
+                  {password.length}/6
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
-              </div>
-              <div
-                className={cn(
-                  "relative cursor-pointer border-2 rounded-md p-3 transition-colors",
-                  activeField === "password" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300",
-                )}
-                onClick={() => setActiveField("password")}
-              >
-                <div className="text-2xl font-mono tracking-widest text-center">
-                  {showPassword ? formatDisplayValue(password, 6) : "•".repeat(password.length).padEnd(6, "_")}
-                </div>
-                {useKeyboard && (
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    maxLength={6}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value.replace(/\D/g, ""))}
-                    className="absolute inset-0 opacity-0"
-                    autoFocus={activeField === "password"}
-                  />
-                )}
               </div>
             </div>
 
             {/* Input Method Toggle */}
-            <div className="flex justify-center">
-              <Button type="button" variant="outline" size="sm" onClick={() => setUseKeyboard(!useKeyboard)}>
-                {useKeyboard ? "Use Touch Pad" : "Use Keyboard"}
+            <div className="flex justify-center space-x-2">
+              <Button
+                type="button"
+                variant={useTouchPad ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUseTouchPad(true)}
+                className="flex items-center space-x-1"
+              >
+                <Grid3X3 className="h-4 w-4" />
+                <span>Touch Pad</span>
+              </Button>
+              <Button
+                type="button"
+                variant={!useTouchPad ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUseTouchPad(false)}
+                className="flex items-center space-x-1"
+              >
+                <Keyboard className="h-4 w-4" />
+                <span>Keyboard</span>
               </Button>
             </div>
 
             {/* Number Pad */}
-            {!useKeyboard && (
-              <NumberPad onNumberClick={handleNumberClick} onBackspace={handleBackspace} onClear={handleClear} />
+            {useTouchPad && (
+              <div className="border-t pt-4">
+                <div className="text-center text-sm text-gray-600 mb-2">
+                  {activeField
+                    ? `Entering ${activeField === "company" ? "Company ID" : activeField === "store" ? "Store Code" : "Password"}`
+                    : "Select a field to start entering"}
+                </div>
+                <NumberPad />
+              </div>
             )}
 
-            <Button type="submit" className="w-full h-12 text-lg" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign In"
-              )}
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              className="w-full h-12 text-lg font-semibold"
+              disabled={isLoading || companyId.length !== 5 || storeCode.length !== 3 || password.length !== 6}
+            >
+              {isLoading ? "Signing In..." : "Sign In"}
             </Button>
           </form>
 
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm font-medium text-gray-700 mb-2">Demo Credentials:</p>
-            <div className="space-y-1 text-xs text-gray-600">
-              <p>
-                <strong>Main Store:</strong> 12345 / 001 / 123456
-              </p>
-              <p>
-                <strong>Branch Store:</strong> 12345 / 002 / 654321
-              </p>
-              <p>
-                <strong>Regional Store:</strong> 12345 / 003 / 111222
-              </p>
-            </div>
+          {/* Demo Credentials */}
+          <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+            <div className="font-semibold mb-1">Demo Credentials:</div>
+            <div>Company: 12345 | Store: 001 | Password: 123456 (Admin)</div>
+            <div>Company: 12345 | Store: 002 | Password: 654321 (Manager)</div>
+            <div>Company: 12345 | Store: 003 | Password: 111222 (Cashier)</div>
           </div>
         </CardContent>
       </Card>
