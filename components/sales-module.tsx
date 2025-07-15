@@ -5,18 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
 import { useCurrency } from "@/hooks/use-currency"
-import { Loader2, PlusCircle, MinusCircle, XCircle, DollarSign, Save, RotateCcw } from "lucide-react"
+import { useStore } from "@/hooks/use-store"
+import { Loader2, PlusCircle, MinusCircle, XCircle, Save, RotateCcw, CreditCard } from "lucide-react"
+import PaymentDialog from "@/components/payment-dialog"
+import PrintPreview from "@/components/print-preview"
 
 interface Product {
   id: string
@@ -41,10 +37,25 @@ interface HeldTransaction {
   notes?: string
 }
 
+interface Sale {
+  id: string
+  transaction_id: string
+  cashier_id: string
+  store_id: string
+  items: CartItem[]
+  subtotal: number
+  tax_amount: number
+  total_amount: number
+  payment_method: string
+  payment_details: any
+  created_at: string
+}
+
 export default function SalesModule() {
   const { user } = useAuth()
   const { toast } = useToast()
   const { formatCurrency } = useCurrency()
+  const { currentStore } = useStore()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [products, setProducts] = useState<Product[]>([
@@ -55,18 +66,29 @@ export default function SalesModule() {
     { id: "prod-005", sku: "SSD-005", name: "External SSD 1TB", price: 150.0, stock_quantity: 75 },
   ])
   const [cart, setCart] = useState<CartItem[]>([])
+  const [subtotal, setSubtotal] = useState(0)
+  const [taxAmount, setTaxAmount] = useState(0)
   const [total, setTotal] = useState(0)
-  const [paymentMethod, setPaymentMethod] = useState("cash")
   const [isProcessingSale, setIsProcessingSale] = useState(false)
   const [heldTransactions, setHeldTransactions] = useState<HeldTransaction[]>([])
   const [isHoldingSale, setIsHoldingSale] = useState(false)
   const [holdName, setHoldName] = useState("")
   const [isRecallingSale, setIsRecallingSale] = useState(false)
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [showPrintPreview, setShowPrintPreview] = useState(false)
+  const [completedSale, setCompletedSale] = useState<Sale | null>(null)
+
+  const TAX_RATE = currentStore?.tax_rate || 0.085 // 8.5% default tax rate
 
   useEffect(() => {
-    const newTotal = cart.reduce((sum, item) => sum + item.subtotal, 0)
+    const newSubtotal = cart.reduce((sum, item) => sum + item.subtotal, 0)
+    const newTaxAmount = newSubtotal * TAX_RATE
+    const newTotal = newSubtotal + newTaxAmount
+
+    setSubtotal(newSubtotal)
+    setTaxAmount(newTaxAmount)
     setTotal(newTotal)
-  }, [cart])
+  }, [cart, TAX_RATE])
 
   const filteredProducts = products.filter(
     (product) =>
@@ -102,7 +124,7 @@ export default function SalesModule() {
         return [...prevCart, { ...product, quantity: 1, subtotal: product.price }]
       }
     })
-    setSearchTerm("") // Clear search after adding
+    setSearchTerm("")
   }
 
   const updateCartQuantity = (itemId: string, delta: number) => {
@@ -112,7 +134,7 @@ export default function SalesModule() {
           if (item.id === itemId) {
             const newQuantity = item.quantity + delta
             const productInStock = products.find((p) => p.id === itemId)
-            if (!productInStock) return item // Should not happen
+            if (!productInStock) return item
 
             if (newQuantity > productInStock.stock_quantity) {
               toast({
@@ -124,13 +146,13 @@ export default function SalesModule() {
             }
 
             if (newQuantity <= 0) {
-              return null // Mark for removal
+              return null
             }
             return { ...item, quantity: newQuantity, subtotal: newQuantity * item.price }
           }
           return item
         })
-        .filter(Boolean) as CartItem[] // Remove nulls
+        .filter(Boolean) as CartItem[]
 
       return updatedCart
     })
@@ -142,11 +164,12 @@ export default function SalesModule() {
 
   const clearCart = () => {
     setCart([])
+    setSubtotal(0)
+    setTaxAmount(0)
     setTotal(0)
-    setPaymentMethod("cash")
   }
 
-  const processSale = async () => {
+  const handlePaymentClick = () => {
     if (cart.length === 0) {
       toast({
         title: "Empty Cart",
@@ -165,12 +188,29 @@ export default function SalesModule() {
       return
     }
 
+    setShowPaymentDialog(true)
+  }
+
+  const handlePaymentComplete = async (paymentData: any) => {
     setIsProcessingSale(true)
     try {
-      // Simulate API call delay
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      // Update product stock in local state
+      const newSale: Sale = {
+        id: `sale-${Date.now()}`,
+        transaction_id: `TXN-${Date.now()}`,
+        cashier_id: user!.id,
+        store_id: currentStore?.id || "main-store",
+        items: cart,
+        subtotal,
+        tax_amount: taxAmount,
+        total_amount: total,
+        payment_method: paymentData.method,
+        payment_details: paymentData,
+        created_at: new Date().toISOString(),
+      }
+
+      // Update product stock
       setProducts((prevProducts) =>
         prevProducts.map((product) => {
           const cartItem = cart.find((item) => item.id === product.id)
@@ -181,10 +221,15 @@ export default function SalesModule() {
         }),
       )
 
+      setCompletedSale(newSale)
+      setShowPaymentDialog(false)
+      setShowPrintPreview(true)
+
       toast({
-        title: "Sale Processed",
-        description: `Sale completed successfully! Total: ${formatCurrency(total)}`,
+        title: "Sale Completed",
+        description: `Sale processed successfully! Total: ${formatCurrency(total)}`,
       })
+
       clearCart()
     } catch (error) {
       console.error("Error processing sale:", error)
@@ -219,11 +264,10 @@ export default function SalesModule() {
 
     setIsHoldingSale(true)
     try {
-      // Simulate API call delay
       await new Promise((resolve) => setTimeout(resolve, 500))
 
       const newHeldTransaction: HeldTransaction = {
-        id: Date.now().toString(), // Simple unique ID
+        id: Date.now().toString(),
         transaction_name: holdName || `Held Sale ${new Date().toLocaleString()}`,
         cashier_id: user.id,
         items: cart,
@@ -254,13 +298,10 @@ export default function SalesModule() {
   const recallSale = async (heldTransaction: HeldTransaction) => {
     setIsRecallingSale(true)
     try {
-      // Simulate API call delay
       await new Promise((resolve) => setTimeout(resolve, 500))
 
       setCart(heldTransaction.items)
-      setTotal(heldTransaction.total_amount)
-      setPaymentMethod("cash") // Reset payment method
-      setHeldTransactions((prev) => prev.filter((t) => t.id !== heldTransaction.id)) // Remove from held list
+      setHeldTransactions((prev) => prev.filter((t) => t.id !== heldTransaction.id))
 
       toast({
         title: "Sale Recalled",
@@ -283,7 +324,7 @@ export default function SalesModule() {
       {/* Product Search & List */}
       <Card className="lg:col-span-2 flex flex-col">
         <CardHeader>
-          <CardTitle>Products</CardTitle>
+          <CardTitle>Products - {currentStore?.name || "Main Store"}</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 overflow-auto">
           <Input
@@ -372,18 +413,28 @@ export default function SalesModule() {
           )}
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <div className="flex justify-between w-full text-lg font-bold">
-            <span>Total:</span>
-            <span>{formatCurrency(total)}</span>
+          <div className="w-full space-y-2">
+            <div className="flex justify-between">
+              <span>Subtotal:</span>
+              <span>{formatCurrency(subtotal)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Tax ({(TAX_RATE * 100).toFixed(1)}%):</span>
+              <span>{formatCurrency(taxAmount)}</span>
+            </div>
+            <div className="flex justify-between text-lg font-bold border-t pt-2">
+              <span>Total:</span>
+              <span>{formatCurrency(total)}</span>
+            </div>
           </div>
           <div className="flex gap-2 w-full">
-            <Button className="flex-1" onClick={processSale} disabled={isProcessingSale || cart.length === 0}>
+            <Button className="flex-1" onClick={handlePaymentClick} disabled={isProcessingSale || cart.length === 0}>
               {isProcessingSale ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <DollarSign className="mr-2 h-4 w-4" />
+                <CreditCard className="mr-2 h-4 w-4" />
               )}
-              Process Sale
+              Payment
             </Button>
             <Button
               variant="outline"
@@ -396,11 +447,14 @@ export default function SalesModule() {
           </div>
           <div className="flex gap-2 w-full">
             <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="flex-1 bg-transparent" disabled={cart.length === 0}>
-                  <Save className="mr-2 h-4 w-4" /> Hold Sale
-                </Button>
-              </DialogTrigger>
+              <Button
+                variant="outline"
+                className="flex-1 bg-transparent"
+                disabled={cart.length === 0}
+                onClick={() => setHoldName("")}
+              >
+                <Save className="mr-2 h-4 w-4" /> Hold Sale
+              </Button>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Hold Current Sale</DialogTitle>
@@ -419,11 +473,9 @@ export default function SalesModule() {
             </Dialog>
 
             <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="flex-1 bg-transparent" disabled={heldTransactions.length === 0}>
-                  <RotateCcw className="mr-2 h-4 w-4" /> Recall Sale
-                </Button>
-              </DialogTrigger>
+              <Button variant="outline" className="flex-1 bg-transparent" disabled={heldTransactions.length === 0}>
+                <RotateCcw className="mr-2 h-4 w-4" /> Recall Sale
+              </Button>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Recall Held Sale</DialogTitle>
@@ -467,6 +519,19 @@ export default function SalesModule() {
           </div>
         </CardFooter>
       </Card>
+
+      {/* Payment Dialog */}
+      <PaymentDialog
+        open={showPaymentDialog}
+        onOpenChange={setShowPaymentDialog}
+        total={total}
+        onPaymentComplete={handlePaymentComplete}
+      />
+
+      {/* Print Preview Dialog */}
+      {completedSale && (
+        <PrintPreview open={showPrintPreview} onOpenChange={setShowPrintPreview} sale={completedSale} />
+      )}
     </div>
   )
 }

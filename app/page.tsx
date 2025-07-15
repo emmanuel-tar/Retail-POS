@@ -3,21 +3,25 @@
 import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Home, ShoppingCart, Package, Users, BarChart, Settings, Truck } from "lucide-react"
+import { Home, ShoppingCart, Package, Users, BarChart, Settings, Truck, Building } from "lucide-react"
 import SalesModule from "@/components/sales-module"
 import InventoryModule from "@/components/inventory-module"
-import ReportsModule from "@/components/reports-module"
+import AdvancedReports from "@/components/advanced-reports"
 import EnhancedUserManagement from "@/components/enhanced-user-management"
 import PurchaseModule from "@/components/purchase-module"
 import SupplierModule from "@/components/supplier-module"
 import SettingsModule from "@/components/settings-module"
+import StoreManagement from "@/components/store-management"
 import LoginForm from "@/components/login-form"
 import { AuthProvider, useAuth } from "@/hooks/use-auth"
+import { StoreProvider } from "@/hooks/use-store"
 
 export default function HomeDashboard() {
   return (
     <AuthProvider>
-      <AppContent />
+      <StoreProvider>
+        <AppContent />
+      </StoreProvider>
     </AuthProvider>
   )
 }
@@ -37,13 +41,15 @@ function AppContent() {
       case "inventory":
         return <InventoryModule />
       case "reports":
-        return <ReportsModule />
+        return <AdvancedReports />
       case "users":
         return <EnhancedUserManagement />
       case "purchases":
         return <PurchaseModule />
       case "suppliers":
         return <SupplierModule />
+      case "stores":
+        return <StoreManagement />
       case "settings":
         return <SettingsModule />
       default:
@@ -90,6 +96,15 @@ function AppContent() {
             onClick={() => setActiveModule("suppliers")}
           >
             <Home className="h-5 w-5" />
+          </Button>
+          <Button
+            variant={activeModule === "stores" ? "secondary" : "ghost"}
+            size="icon"
+            className="rounded-lg"
+            aria-label="Stores"
+            onClick={() => setActiveModule("stores")}
+          >
+            <Building className="h-5 w-5" />
           </Button>
           <Button
             variant={activeModule === "reports" ? "secondary" : "ghost"}
