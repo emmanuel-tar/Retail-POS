@@ -1,150 +1,129 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 
 interface User {
   id: string
-  userId: string
-  name: string
+  username: string
   email: string
   role: string
   permissions: string[]
-  status: string
 }
 
-interface AuthState {
-  isAuthenticated: boolean
+interface AuthContextType {
   user: User | null
-  isLoading: boolean
-  error: string | null
+  login: (username: string, password: string) => Promise<void>
+  logout: () => void
+  checkPermissions: (userRole: string, permission: string) => boolean
 }
 
-export function useAuth() {
-  const [authState, setAuthState] = useState<AuthState>({
-    isAuthenticated: false,
-    user: null,
-    isLoading: true,
-    error: null,
-  })
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-  const login = useCallback(async (userId: string, password: string) => {
-    setAuthState((prev) => ({ ...prev, isLoading: true, error: null }))
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId, password }),
-      })
+// Mock users data
+const mockUsers: User[] = [
+  {
+    id: "1",
+    username: "admin",
+    email: "admin@pos.com",
+    role: "admin",
+    permissions: [
+      "view_sales",
+      "view_inventory",
+      "view_reports",
+      "manage_users",
+      "manage_purchases",
+      "manage_suppliers",
+      "manage_settings",
+    ],
+  },
+  {
+    id: "2",
+    username: "cashier",
+    email: "cashier@pos.com",
+    role: "cashier",
+    permissions: ["view_sales", "view_inventory"],
+  },
+  {
+    id: "3",
+    username: "manager",
+    email: "manager@pos.com",
+    role: "manager",
+    permissions: ["view_sales", "view_inventory", "view_reports", "manage_purchases", "manage_suppliers"],
+  },
+]
 
-      const data = await response.json()
+// Role-based permissions
+const rolePermissions: Record<string, string[]> = {
+  admin: [
+    "view_sales",
+    "view_inventory",
+    "view_reports",
+    "manage_users",
+    "manage_purchases",
+    "manage_suppliers",
+    "manage_settings",
+  ],
+  manager: ["view_sales", "view_inventory", "view_reports", "manage_purchases", "manage_suppliers"],
+  cashier: ["view_sales", "view_inventory"],
+}
 
-      if (response.ok) {
-        localStorage.setItem("token", data.token)
-        setAuthState({
-          isAuthenticated: true,
-          user: data.user,
-          isLoading: false,
-          error: null,
-        })
-        return { success: true }
-      } else {
-        setAuthState((prev) => ({
-          ...prev,
-          isAuthenticated: false,
-          user: null,
-          isLoading: false,
-          error: data.error || "Login failed",
-        }))
-        return { success: false, error: data.error || "Login failed" }
-      }
-    } catch (error) {
-      console.error("Login API call failed:", error)
-      setAuthState((prev) => ({
-        ...prev,
-        isAuthenticated: false,
-        user: null,
-        isLoading: false,
-        error: "Network error or server unreachable",
-      }))
-      return { success: false, error: "Network error or server unreachable" }
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null)
+
+  useEffect(() => {
+    // Check for stored user session
+    const storedUser = localStorage.getItem("pos_user")
+    if (storedUser) {
+      setUser(JSON.parse(storedUser))
     }
   }, [])
 
-  const logout = useCallback(() => {
-    localStorage.removeItem("token")
-    setAuthState({
-      isAuthenticated: false,
-      user: null,
-      isLoading: false,
-      error: null,
-    })
-  }, [])
+  const login = async (username: string, password: string): Promise<void> => {
+    // Simulate API call delay
+    await new Promise((resolve) => setTimeout(resolve, 1000))
 
-  const verifyToken = useCallback(async () => {
-    const token = localStorage.getItem("token")
-    if (!token) {
-      setAuthState({
-        isAuthenticated: false,
-        user: null,
-        isLoading: false,
-        error: null,
-      })
+    // Simple authentication check
+    if (username === "admin" && password === "password") {
+      const user = mockUsers[0]
+      setUser(user)
+      localStorage.setItem("pos_user", JSON.stringify(user))
       return
     }
 
-    try {
-      const response = await fetch("/api/auth/verify", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.isAuthenticated) {
-        setAuthState({
-          isAuthenticated: true,
-          user: data.user,
-          isLoading: false,
-          error: null,
-        })
-      } else {
-        localStorage.removeItem("token")
-        setAuthState({
-          isAuthenticated: false,
-          user: null,
-          isLoading: false,
-          error: data.error || "Session expired or invalid",
-        })
-      }
-    } catch (error) {
-      console.error("Token verification API call failed:", error)
-      localStorage.removeItem("token")
-      setAuthState({
-        isAuthenticated: false,
-        user: null,
-        isLoading: false,
-        error: "Network error during session verification",
-      })
+    if (username === "cashier" && password === "password") {
+      const user = mockUsers[1]
+      setUser(user)
+      localStorage.setItem("pos_user", JSON.stringify(user))
+      return
     }
-  }, [])
 
-  useEffect(() => {
-    verifyToken()
-  }, [verifyToken])
+    if (username === "manager" && password === "password") {
+      const user = mockUsers[2]
+      setUser(user)
+      localStorage.setItem("pos_user", JSON.stringify(user))
+      return
+    }
 
-  const hasPermission = useCallback(
-    (permission: string) => {
-      if (!authState.isAuthenticated || !authState.user) {
-        return false
-      }
-      return authState.user.permissions.includes(permission)
-    },
-    [authState.isAuthenticated, authState.user],
-  )
+    throw new Error("Invalid credentials")
+  }
 
-  return { ...authState, login, logout, hasPermission }
+  const logout = () => {
+    setUser(null)
+    localStorage.removeItem("pos_user")
+  }
+
+  const checkPermissions = (userRole: string, permission: string): boolean => {
+    const permissions = rolePermissions[userRole] || []
+    return permissions.includes(permission)
+  }
+
+  return <AuthContext.Provider value={{ user, login, logout, checkPermissions }}>{children}</AuthContext.Provider>
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider")
+  }
+  return context
 }
